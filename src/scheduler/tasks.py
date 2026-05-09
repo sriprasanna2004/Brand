@@ -31,11 +31,19 @@ celery_app.conf.update(
 def run_async(coro):
     """
     Run an async coroutine safely from a Celery worker context.
-    Uses a ThreadPoolExecutor to avoid event loop conflicts when
-    Celery workers already have a running loop.
+    Uses a ThreadPoolExecutor to avoid event loop conflicts.
+    Disposes the SQLAlchemy engine before each run to prevent
+    asyncpg connection pool conflicts across event loops.
     """
+    async def _wrapped():
+        # Import here to avoid circular imports
+        from src.database import engine
+        # Dispose existing connections — they belong to a different event loop
+        await engine.dispose()
+        return await coro
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(asyncio.run, coro)
+        future = pool.submit(asyncio.run, _wrapped())
         return future.result()
 
 
