@@ -3,7 +3,6 @@ import os
 from loguru import logger
 
 # Keywords that trigger the full event-driven nurture sequence.
-# Matches the LeadCaptureAgent's INTENT_KEYWORDS list.
 INTENT_KEYWORDS = {
     "fees", "batch", "admission", "join", "cost", "price",
     "register", "enroll", "course", "classes", "timing",
@@ -23,19 +22,19 @@ def verify_webhook(mode: str, token: str, challenge: str) -> str | None:
 async def handle_instagram_event(payload: dict) -> dict:
     """
     Entry point for all Instagram webhook events.
-    """
-    logger.info(f"[Webhook] Raw payload received: {payload}")
 
     DM flow (event-driven nurture):
       1. Receive DM
-      2. Dispatch run_lead_crew_task (day=0) → LeadCaptureAgent scores lead
-         → instant IG auto-reply queued
-         → Day 3/7/14 WhatsApp nurture scheduled via Celery ETA
-      3. If intent keywords found → admin Telegram alert (handled inside LeadCrew)
+      2. Dispatch run_lead_crew_task (day=0) -> LeadCaptureAgent scores lead
+         -> instant IG auto-reply queued
+         -> Day 3/7/14 WhatsApp nurture scheduled via Celery ETA
+      3. If intent keywords found -> admin Telegram alert (handled inside LeadCrew)
 
     Comment flow:
       Only triggers lead capture if intent keywords are present.
     """
+    logger.info(f"[Webhook] Raw payload received: {payload}")
+
     from src.scheduler.tasks import run_lead_crew_task
 
     try:
