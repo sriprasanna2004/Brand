@@ -1,0 +1,81 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - brandiq-net
+
+  worker:
+    build: .
+    command: celery -A src.scheduler.tasks worker --loglevel=info --concurrency=4
+    volumes:
+      - ./src:/app/src
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - brandiq-net
+
+  beat:
+    build: .
+    command: celery -A src.scheduler.tasks beat --loglevel=info
+    volumes:
+      - ./src:/app/src
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - brandiq-net
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: brandiq
+      POSTGRES_USER: brandiq
+      POSTGRES_PASSWORD: brandiq
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - brandiq-net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - brandiq-net
+
+  dashboard:
+    build: .
+    command: streamlit run src/dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    depends_on:
+      - api
+    networks:
+      - brandiq-net
+
+volumes:
+  postgres_data:
+
+networks:
+  brandiq-net:
+    driver: bridge
