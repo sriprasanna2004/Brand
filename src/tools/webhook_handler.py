@@ -23,6 +23,8 @@ def verify_webhook(mode: str, token: str, challenge: str) -> str | None:
 async def handle_instagram_event(payload: dict) -> dict:
     """
     Entry point for all Instagram webhook events.
+    """
+    logger.info(f"[Webhook] Raw payload received: {payload}")
 
     DM flow (event-driven nurture):
       1. Receive DM
