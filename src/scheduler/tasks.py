@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import os
 from datetime import date, datetime, timezone, timedelta
 
@@ -9,7 +10,6 @@ from loguru import logger
 import re as _re
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-# Railway appends ?ssl_cert_reqs=CERT_NONE — redis-py needs lowercase 'none'
 REDIS_URL_BROKER = _re.sub(r'ssl_cert_reqs=CERT_NONE', 'ssl_cert_reqs=none', REDIS_URL, flags=_re.IGNORECASE)
 
 celery_app = Celery(
@@ -26,6 +26,17 @@ celery_app.conf.update(
     timezone="Asia/Kolkata",
     enable_utc=True,
 )
+
+
+def run_async(coro):
+    """
+    Run an async coroutine safely from a Celery worker context.
+    Uses a ThreadPoolExecutor to avoid event loop conflicts when
+    Celery workers already have a running loop.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(asyncio.run, coro)
+        return future.result()
 
 
 def _send_telegram_alert(message: str) -> None:
@@ -58,7 +69,7 @@ def _send_telegram_alert(message: str) -> None:
 def run_content_crew_task(self):
     from src.crews.content_crew import run_content_crew
     try:
-        result = asyncio.run(run_content_crew(week_start=date.today()))
+        result = run_async(run_content_crew(week_start=date.today()))
         logger.info("Content crew completed successfully")
         return result
     except Exception as exc:
@@ -72,7 +83,7 @@ def run_content_crew_task(self):
             _send_telegram_alert(msg)
             try:
                 from src.tools.telegram_tool import send_failure_alert
-                asyncio.run(send_failure_alert(
+                run_async(send_failure_alert(
                     agent_name="ContentCrew",
                     error=str(exc),
                     job_id=f"content_{date.today()}",
@@ -95,7 +106,7 @@ def run_content_crew_task(self):
 def run_lead_crew_task(self, ig_handle: str, message_text: str = "", day_number: int = 0):
     from src.crews.lead_crew import run_lead_crew
     try:
-        result = asyncio.run(run_lead_crew(
+        result = run_async(run_lead_crew(
             ig_handle=ig_handle,
             message_text=message_text,
             day_number=day_number,
@@ -109,7 +120,7 @@ def run_lead_crew_task(self, ig_handle: str, message_text: str = "", day_number:
             sentry_sdk.capture_exception(exc)
             try:
                 from src.tools.telegram_tool import send_failure_alert
-                asyncio.run(send_failure_alert(
+                run_async(send_failure_alert(
                     agent_name="LeadCrew",
                     error=str(exc),
                     job_id=f"lead_{ig_handle}_{day_number}",
@@ -132,7 +143,7 @@ def run_lead_crew_task(self, ig_handle: str, message_text: str = "", day_number:
 def run_analytics_crew_task(self):
     from src.crews.analytics_crew import run_analytics_crew
     try:
-        result = asyncio.run(run_analytics_crew())
+        result = run_async(run_analytics_crew())
         return result
     except Exception as exc:
         logger.error(f"[analytics.daily] Failed: {exc}")
@@ -142,7 +153,7 @@ def run_analytics_crew_task(self):
             sentry_sdk.capture_exception(exc)
             try:
                 from src.tools.telegram_tool import send_failure_alert
-                asyncio.run(send_failure_alert(
+                run_async(send_failure_alert(
                     agent_name="AnalyticsCrew",
                     error=str(exc),
                     job_id=f"analytics_{date.today()}",
@@ -166,7 +177,7 @@ def send_instant_ig_reply_task(self, ig_user_id: str, message: str):
     """Send an instant Instagram DM reply to a lead right after scoring."""
     from src.tools.instagram_tool import send_dm
     try:
-        result = asyncio.run(send_dm(ig_user_id=ig_user_id, message=message))
+        result = run_async(send_dm(ig_user_id=ig_user_id, message=message))
         if result:
             logger.info(f"[lead.instant_reply] Auto-reply sent to @{ig_user_id}")
         else:
@@ -183,7 +194,6 @@ def send_instant_ig_reply_task(self, ig_user_id: str, message: str):
 
 # ---------------------------------------------------------------------------
 # Task 5: Scheduled WhatsApp nurture (Day 3 / 7 / 14)
-# Dispatched with .apply_async(eta=...) from the lead capture flow.
 # ---------------------------------------------------------------------------
 
 @celery_app.task(
@@ -200,7 +210,7 @@ def run_nurture_scheduled_task(self, ig_handle: str, day_number: int):
     """
     from src.crews.lead_crew import run_lead_crew
     try:
-        result = asyncio.run(run_lead_crew(
+        result = run_async(run_lead_crew(
             ig_handle=ig_handle,
             message_text="",
             day_number=day_number,
@@ -215,7 +225,7 @@ def run_nurture_scheduled_task(self, ig_handle: str, day_number: int):
             sentry_sdk.capture_exception(exc)
             try:
                 from src.tools.telegram_tool import send_failure_alert
-                asyncio.run(send_failure_alert(
+                run_async(send_failure_alert(
                     agent_name="LeadNurture",
                     error=str(exc),
                     job_id=f"nurture_{ig_handle}_day{day_number}",
@@ -229,8 +239,6 @@ def schedule_nurture_sequence(ig_handle: str, enrolled_at: datetime) -> None:
     """
     Enqueue Day 3, 7, and 14 nurture tasks with Celery ETA.
     Call this once when a lead is first captured (Day 0).
-
-    enrolled_at: the UTC datetime when the lead sent the DM.
     """
     schedule = {
         3:  enrolled_at + timedelta(days=3),
