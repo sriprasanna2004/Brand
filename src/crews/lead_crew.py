@@ -53,7 +53,7 @@ async def run_lead_crew(
                     # Only re-enroll if not already in a sequence
                     if not lead.nurture_enrolled_at:
                         lead.nurture_enrolled_at = now
-                        lead.intent_keywords = ",".join(score.intent_keywords_found)
+                        lead.intent_keywords = ",".join(score.intent_keywords_found) if score.intent_keywords_found else ""
                 else:
                     lead = Lead(
                         id=uuid.uuid4(),
@@ -61,7 +61,7 @@ async def run_lead_crew(
                         status=LeadStatus(score.status.value),
                         source=LeadSource.instagram_dm,
                         nurture_enrolled_at=now,
-                        intent_keywords=",".join(score.intent_keywords_found),
+                        intent_keywords=",".join(score.intent_keywords_found) if score.intent_keywords_found else "",
                     )
                     db.add(lead)
 
@@ -148,10 +148,9 @@ async def run_lead_crew(
                 return {"skipped": True, "reason": "already_sent", "ig_handle": ig_handle, "day_number": day_number}
 
             # Parse stored intent keywords to give the agent context
-            intent_keywords = (
-                [kw.strip() for kw in lead.intent_keywords.split(",") if kw.strip()]
-                if lead.intent_keywords else []
-            )
+            intent_keywords = []
+            if lead.intent_keywords:
+                intent_keywords = [kw.strip() for kw in lead.intent_keywords.split(",") if kw.strip()]
 
             logger.info(f"[LeadCrew] Nurturing @{ig_handle} day={day_number}")
             nurture = run_lead_nurture_agent(
