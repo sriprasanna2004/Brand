@@ -15,7 +15,6 @@ REDIS_URL_BROKER = _re.sub(r'ssl_cert_reqs=CERT_NONE', 'ssl_cert_reqs=none', RED
 celery_app = Celery(
     "brandiq",
     broker=REDIS_URL_BROKER,
-    backend=REDIS_URL_BROKER,
     include=["src.scheduler.tasks"],
 )
 
@@ -25,6 +24,15 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="Asia/Kolkata",
     enable_utc=True,
+    # Reduce Redis usage significantly
+    task_ignore_result=True,
+    result_backend=None,
+    worker_prefetch_multiplier=1,
+    broker_heartbeat=60,
+    broker_connection_retry_on_startup=True,
+    beat_max_loop_interval=300,
+    worker_send_task_events=False,
+    task_send_sent_event=False,
 )
 
 
