@@ -106,10 +106,10 @@ async def run_content_crew(week_start: date) -> dict:
                 logger.info(f"[ContentCrew] Reel script generated, hook='{reel_script.hook[:40]}'")
             except Exception as e:
                 logger.warning(f"[ContentCrew] Reel script failed ({e}), using regular caption")
-            image_url = await generate_image(prompt=visual_asset.image_prompt, topic=topic)
+            image_url = await generate_image(prompt=visual_asset.image_prompt, topic=topic, caption_text=caption_a)
         else:
             logger.info("[ContentCrew] Step 5 — Generating image via Pollinations/Stability AI -> R2")
-            image_url = await generate_image(prompt=visual_asset.image_prompt, topic=topic)
+            image_url = await generate_image(prompt=visual_asset.image_prompt, topic=topic, caption_text=caption_a)
 
         # ── Step 6: Schedule ─────────────────────────────────────────────────
         logger.info("[ContentCrew] Step 6 — SchedulerAgent")
