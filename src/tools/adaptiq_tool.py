@@ -31,13 +31,11 @@ async def start_trial(
 
     async with AsyncSessionLocal() as db:
         now = datetime.now(timezone.utc)
-        # Check if trial already exists
         existing = await db.scalar(select(AdaptiqTrial).where(AdaptiqTrial.lead_id == uuid.UUID(lead_id)))
         if existing:
             logger.info(f"[Adaptiq] Trial already exists for lead_id={lead_id}")
             return False
 
-        subjects_str = ",".join(weak_subjects or [])
         trial = AdaptiqTrial(
             id=uuid.uuid4(),
             lead_id=uuid.UUID(lead_id),
@@ -46,24 +44,13 @@ async def start_trial(
         )
         db.add(trial)
         await db.commit()
-
-        # Update optional fields after insert to avoid column type conflicts
-        if source_post_id or weak_subjects:
-            t = await db.scalar(select(AdaptiqTrial).where(AdaptiqTrial.lead_id == uuid.UUID(lead_id)))
-            if t:
-                if source_post_id:
-                    t.source_post_id = source_post_id
-                if weak_subjects:
-                    t.weak_subjects = subjects_str
-                await db.commit()
-
         logger.info(f"[Adaptiq] Trial started for lead_id={lead_id}")
 
     try:
         msg = run_adaptiq_promo_agent(
             lead_name=lead_name, trial_day=1,
             weak_subjects=weak_subjects or [],
-            source_post=source_post_id,
+            source_post="",
         )
         if lead_phone:
             await send_text_message(phone=lead_phone, message=msg.message)
@@ -120,7 +107,6 @@ async def run_trial_sequences() -> int:
             await db.commit()
 
             try:
-                weak = [s.strip() for s in (trial.weak_subjects or "").split(",") if s.strip()]
                 # Simulate improvement on Day 5+ (real app would pull from Adaptiq API)
                 improvement = trial.improvement_pct or 0
                 if trial_day >= 5 and improvement == 0:
@@ -131,9 +117,9 @@ async def run_trial_sequences() -> int:
                 msg = run_adaptiq_promo_agent(
                     lead_name=lead.name or lead.ig_handle,
                     trial_day=trial_day,
-                    weak_subjects=weak,
+                    weak_subjects=[],
                     improvement_pct=improvement,
-                    source_post=trial.source_post_id or "",
+                    source_post="",
                 )
 
                 if lead.phone:

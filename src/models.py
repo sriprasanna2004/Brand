@@ -175,8 +175,6 @@ class AdaptiqTrial(Base):
     converted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     plan: Mapped[str | None] = mapped_column(String, nullable=True)
     # Enhanced tracking fields
-    source_post_id: Mapped[str | None] = mapped_column(String, nullable=True)   # which post drove signup
-    weak_subjects: Mapped[str | None] = mapped_column(String, nullable=True)    # comma-separated string
     improvement_pct: Mapped[int] = mapped_column(Integer, default=0)
     webinar_attended: Mapped[bool] = mapped_column(Boolean, default=False)
     demo_booked: Mapped[bool] = mapped_column(Boolean, default=False)
