@@ -153,12 +153,36 @@ def run_strategy_agent(week_start: Optional[date] = None) -> ContentPlan:
     raw = response.content.strip()
     raw = raw.replace("```json", "").replace("```", "").strip()
 
+    def _clean_json_strings(text: str) -> str:
+        result = []
+        in_string = False
+        i = 0
+        while i < len(text):
+            c = text[i]
+            if c == '"' and (i == 0 or text[i-1] != '\\'):
+                in_string = not in_string
+                result.append(c)
+            elif in_string and c == '\n':
+                result.append('\\n')
+            elif in_string and c == '\r':
+                result.append('\\r')
+            elif in_string and c == '\t':
+                result.append('\\t')
+            else:
+                result.append(c)
+            i += 1
+        return "".join(result)
+
     try:
         data = json.loads(raw)
+    except json.JSONDecodeError:
+        raw = _clean_json_strings(raw)
+        data = json.loads(raw)
+
+    try:
         topics = data.get("topics", data) if isinstance(data, dict) else data
         plan = ContentPlan(week_start=week_start, topics=topics)
         logger.info(f"[StrategyAgent] Plan generated with {len(plan.topics)} topics")
-        # Log the topics for visibility
         for t in plan.topics:
             logger.info(f"  Day {t.get('day')}: [{t.get('subject', t.get('tone', ''))}] {t.get('topic')}")
         return plan

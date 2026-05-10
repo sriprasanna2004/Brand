@@ -62,8 +62,40 @@ def run_content_writer_agent(topic: str, tone: str) -> PostContent:
     raw = response.content.strip()
     raw = raw.replace("```json", "").replace("```", "").strip()
 
+    # The LLM sometimes returns literal newlines inside JSON string values
+    # which causes "Invalid control character" errors. Fix by trying a
+    # targeted clean: replace bare newlines only inside quoted strings.
+    import re
+
+    def _clean_json_strings(text: str) -> str:
+        """Replace unescaped newlines/tabs inside JSON string values only."""
+        # Replace literal newlines inside JSON strings with \n escape
+        result = []
+        in_string = False
+        i = 0
+        while i < len(text):
+            c = text[i]
+            if c == '"' and (i == 0 or text[i-1] != '\\'):
+                in_string = not in_string
+                result.append(c)
+            elif in_string and c == '\n':
+                result.append('\\n')
+            elif in_string and c == '\r':
+                result.append('\\r')
+            elif in_string and c == '\t':
+                result.append('\\t')
+            else:
+                result.append(c)
+            i += 1
+        return "".join(result)
+
     try:
         data = json.loads(raw)
+    except json.JSONDecodeError:
+        raw = _clean_json_strings(raw)
+        data = json.loads(raw)
+
+    try:
         content = PostContent(**data)
         logger.info(f"[ContentWriterAgent] Captions generated, best_post_time={content.best_post_time}")
         return content
