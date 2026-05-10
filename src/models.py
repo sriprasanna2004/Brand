@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     String, Text, Integer, DateTime, Enum as SAEnum,
-    ForeignKey, JSON, UniqueConstraint
+    ForeignKey, JSON, Boolean
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -176,14 +176,14 @@ class AdaptiqTrial(Base):
     plan: Mapped[str | None] = mapped_column(String, nullable=True)
     # Enhanced tracking fields
     source_post_id: Mapped[str | None] = mapped_column(String, nullable=True)   # which post drove signup
-    weak_subjects: Mapped[str | None] = mapped_column(String, nullable=True)    # comma-separated
-    improvement_pct: Mapped[int | None] = mapped_column(Integer, nullable=True) # Day 5 progress
-    webinar_attended: Mapped[bool] = mapped_column(Integer, default=0)          # 0/1
-    demo_booked: Mapped[bool] = mapped_column(Integer, default=0)               # 0/1
-    payment_initiated: Mapped[bool] = mapped_column(Integer, default=0)         # 0/1
-    day1_sent: Mapped[bool] = mapped_column(Integer, default=0)
-    day3_sent: Mapped[bool] = mapped_column(Integer, default=0)
-    day5_sent: Mapped[bool] = mapped_column(Integer, default=0)
-    day7_sent: Mapped[bool] = mapped_column(Integer, default=0)
+    weak_subjects: Mapped[str | None] = mapped_column(String, nullable=True)    # comma-separated string
+    improvement_pct: Mapped[int] = mapped_column(Integer, default=0)
+    webinar_attended: Mapped[bool] = mapped_column(Boolean, default=False)
+    demo_booked: Mapped[bool] = mapped_column(Boolean, default=False)
+    payment_initiated: Mapped[bool] = mapped_column(Boolean, default=False)
+    day1_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    day3_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    day5_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    day7_sent: Mapped[bool] = mapped_column(Boolean, default=False)
 
     lead: Mapped["Lead"] = relationship(back_populates="trial")
