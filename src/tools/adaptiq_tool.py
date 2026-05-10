@@ -43,12 +43,20 @@ async def start_trial(
             lead_id=uuid.UUID(lead_id),
             trial_start=now,
             trial_end=now + timedelta(days=7),
-            source_post_id=source_post_id or None,
-            weak_subjects=subjects_str or None,
-            improvement_pct=0,
         )
         db.add(trial)
         await db.commit()
+
+        # Update optional fields after insert to avoid column type conflicts
+        if source_post_id or weak_subjects:
+            t = await db.scalar(select(AdaptiqTrial).where(AdaptiqTrial.lead_id == uuid.UUID(lead_id)))
+            if t:
+                if source_post_id:
+                    t.source_post_id = source_post_id
+                if weak_subjects:
+                    t.weak_subjects = subjects_str
+                await db.commit()
+
         logger.info(f"[Adaptiq] Trial started for lead_id={lead_id}")
 
     try:
@@ -64,7 +72,7 @@ async def start_trial(
         async with AsyncSessionLocal() as db:
             t = await db.scalar(select(AdaptiqTrial).where(AdaptiqTrial.lead_id == uuid.UUID(lead_id)))
             if t:
-                t.day1_sent = 1
+                t.day1_sent = True
                 await db.commit()
         return True
     except Exception as e:
@@ -136,13 +144,13 @@ async def run_trial_sequences() -> int:
                 sent_count += 1
                 logger.info(f"[Adaptiq] Day {trial_day} sent to {lead.ig_handle}, urgency={msg.urgency_level}")
 
-                # Mark webinar/demo stages
+        # Mark webinar/demo stages
                 if trial_day == 4:
-                    trial.webinar_attended = 1
+                    trial.webinar_attended = True
                 if trial_day == 6:
-                    trial.demo_booked = 1
+                    trial.demo_booked = True
                 if trial_day == 7:
-                    trial.payment_initiated = 1
+                    trial.payment_initiated = True
 
             except Exception as e:
                 job.status = JobStatus.failed
@@ -163,7 +171,7 @@ async def mark_converted(lead_id: str, plan: str) -> bool:
         if trial:
             trial.converted_at = now
             trial.plan = plan
-            trial.payment_initiated = 1
+            trial.payment_initiated = True
 
         lead = await db.scalar(select(Lead).where(Lead.id == uuid.UUID(lead_id)))
         if lead:
