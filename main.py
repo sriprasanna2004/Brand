@@ -639,11 +639,14 @@ async def get_dashboard_data():
 
 
 @app.get("/adaptiq")
+@app.get("/adaptiq/")
 async def adaptiq_landing():
     """Serve the Adaptiq free trial landing page."""
     from fastapi.responses import FileResponse
     import os
     html_path = os.path.join(os.path.dirname(__file__), "adaptiq_landing.html")
+    if not os.path.exists(html_path):
+        return {"error": f"HTML file not found at {html_path}"}
     return FileResponse(html_path, media_type="text/html")
 
 
