@@ -3,9 +3,13 @@ Analytics tool — pulls Instagram Insights via Meta Graph API
 and stores results in PostAnalytics table.
 """
 import os
+import uuid
 from datetime import datetime, timezone
-from loguru import logger
+
 import httpx
+from loguru import logger
+from sqlalchemy import create_engine, select as sa_select, text
+from sqlalchemy.orm import sessionmaker
 
 GRAPH_BASE = "https://graph.facebook.com/v19.0"
 
@@ -17,6 +21,20 @@ def _token() -> str:
 def _account_id() -> str:
     return os.getenv("INSTAGRAM_ACCOUNT_ID", "")
 
+
+def get_sync_session():
+    db_url = os.getenv("DATABASE_URL_SYNC", "")
+    if not db_url:
+        db_url = os.getenv("DATABASE_URL", "").replace("postgresql+asyncpg://", "postgresql://")
+    engine = create_engine(db_url, pool_pre_ping=True)
+    Session = sessionmaker(bind=engine)
+    return Session()
+
+
+# ---------------------------------------------------------------------------
+# Instagram API helpers — kept async since they're called from async contexts
+# (FastAPI endpoints). sync_post_analytics is sync for Celery cron use.
+# ---------------------------------------------------------------------------
 
 async def get_post_insights(post_id: str) -> dict:
     """Fetch reach, saves, impressions, video_views for a post."""
@@ -36,10 +54,10 @@ async def get_post_insights(post_id: str) -> dict:
     for item in resp.json().get("data", []):
         name = item.get("name")
         value = item.get("values", [{}])[0].get("value", 0)
-        if name == "reach":           result["reach"] = value
-        elif name == "saved":         result["saves"] = value
-        elif name == "impressions":   result["impressions"] = value
-        elif name == "video_views":   result["video_views"] = value
+        if name == "reach":                result["reach"] = value
+        elif name == "saved":              result["saves"] = value
+        elif name == "impressions":        result["impressions"] = value
+        elif name == "video_views":        result["video_views"] = value
         elif name == "total_interactions": result["interactions"] = value
     return result
 
@@ -68,31 +86,38 @@ async def get_account_insights(period: str = "day") -> dict:
     return result
 
 
-async def sync_post_analytics() -> int:
-    """Pull insights for all posted posts and update PostAnalytics table."""
-    from sqlalchemy import select
-    from src.database import AsyncSessionLocal
+def sync_post_analytics() -> int:
+    """
+    Pull insights for all posted posts and update PostAnalytics table.
+    Sync function — safe to call from Celery cron workers.
+    """
     from src.models import Post, PostStatus, PostAnalytics
-    import uuid
+    import asyncio
 
+    db = get_sync_session()
     updated = 0
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(Post).where(Post.status == PostStatus.posted, Post.ig_post_id.isnot(None)).order_by(Post.posted_at.desc()).limit(20)
-        )
-        posts = result.scalars().all()
+
+    try:
+        posts = db.execute(
+            sa_select(Post)
+            .where(Post.status == PostStatus.posted, Post.ig_post_id.isnot(None))
+            .order_by(Post.posted_at.desc())
+            .limit(20)
+        ).scalars().all()
+
         logger.info(f"[Analytics] Syncing insights for {len(posts)} posts with ig_post_id")
 
         for post in posts:
             try:
-                insights = await get_post_insights(post.ig_post_id)  # use real Instagram ID
+                # get_post_insights is async — run it in a fresh event loop
+                insights = asyncio.run(get_post_insights(post.ig_post_id))
                 if not insights:
                     continue
 
-                # Upsert PostAnalytics
-                existing = await db.scalar(
-                    select(PostAnalytics).where(PostAnalytics.post_id == post.id)
-                )
+                existing = db.execute(
+                    sa_select(PostAnalytics).where(PostAnalytics.post_id == post.id)
+                ).scalar_one_or_none()
+
                 if existing:
                     existing.reach = insights.get("reach", 0)
                     existing.saves = insights.get("saves", 0)
@@ -110,32 +135,41 @@ async def sync_post_analytics() -> int:
                         link_clicks=insights.get("interactions", 0),
                     )
                     db.add(pa)
+
                 updated += 1
+
             except Exception as e:
                 logger.error(f"[Analytics] Failed for post {post.id}: {e}")
 
-        await db.commit()
+        db.commit()
+
+    except Exception as e:
+        logger.error(f"[Analytics] sync_post_analytics failed: {e}")
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
     logger.info(f"[Analytics] Synced {updated} posts")
     return updated
 
 
-async def get_top_performing_posts(limit: int = 5) -> list[dict]:
-    """Return top posts by reach from PostAnalytics."""
-    from sqlalchemy import select, text
-    from src.database import AsyncSessionLocal
-
-    async with AsyncSessionLocal() as db:
-        try:
-            result = await db.execute(text("""
-                SELECT p.id::text, LEFT(p.caption_a, 60) as caption,
-                       p.platform, pa.reach, pa.saves, pa.link_clicks,
-                       p.posted_at::text
-                FROM post_analytics pa
-                JOIN posts p ON pa.post_id = p.id
-                ORDER BY pa.reach DESC
-                LIMIT :limit
-            """), {"limit": limit})
-            return [dict(row._mapping) for row in result.fetchall()]
-        except Exception as e:
-            logger.error(f"[Analytics] get_top_performing_posts failed: {e}")
-            return []
+def get_top_performing_posts(limit: int = 5) -> list[dict]:
+    """Return top posts by reach from PostAnalytics. Sync version."""
+    db = get_sync_session()
+    try:
+        result = db.execute(text("""
+            SELECT p.id::text, LEFT(p.caption_a, 60) as caption,
+                   p.platform, pa.reach, pa.saves, pa.link_clicks,
+                   p.posted_at::text
+            FROM post_analytics pa
+            JOIN posts p ON pa.post_id = p.id
+            ORDER BY pa.reach DESC
+            LIMIT :limit
+        """), {"limit": limit})
+        return [dict(row._mapping) for row in result.fetchall()]
+    except Exception as e:
+        logger.error(f"[Analytics] get_top_performing_posts failed: {e}")
+        return []
+    finally:
+        db.close()
