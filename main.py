@@ -638,6 +638,75 @@ async def get_dashboard_data():
     return data
 
 
+@app.get("/adaptiq")
+async def adaptiq_landing():
+    """Serve the Adaptiq free trial landing page."""
+    from fastapi.responses import FileResponse
+    import os
+    html_path = os.path.join(os.path.dirname(__file__), "adaptiq_landing.html")
+    return FileResponse(html_path, media_type="text/html")
+
+
+class AdaptiqRegisterRequest(BaseModel):
+    lead_name: str
+    phone: str
+
+
+@app.post("/adaptiq/register")
+async def adaptiq_register(body: AdaptiqRegisterRequest):
+    """
+    One-shot endpoint for the landing page:
+    1. Creates or finds the lead by phone number
+    2. Starts the Adaptiq trial
+    3. Sends Day 1 WhatsApp message
+    """
+    import uuid as _uuid
+    from sqlalchemy import select
+    from src.database import AsyncSessionLocal
+    from src.models import Lead, LeadStatus, LeadSource
+    from src.tools.adaptiq_tool import start_trial
+
+    # Normalise phone
+    phone = body.phone.strip()
+    if not phone.startswith("+"):
+        phone = "+91" + phone.lstrip("0")
+
+    async with AsyncSessionLocal() as db:
+        # Find existing lead by phone or create new one
+        lead = await db.scalar(select(Lead).where(Lead.phone == phone))
+        if not lead:
+            lead = Lead(
+                id=_uuid.uuid4(),
+                ig_handle=f"adaptiq_{phone[-10:]}",
+                phone=phone,
+                name=body.lead_name,
+                status=LeadStatus.warm,
+                source=LeadSource.instagram_dm,
+            )
+            db.add(lead)
+            await db.commit()
+            await db.refresh(lead)
+        else:
+            # Update name if provided
+            if body.lead_name and not lead.name:
+                lead.name = body.lead_name
+                await db.commit()
+
+    success = await start_trial(
+        lead_id=str(lead.id),
+        lead_phone=phone,
+        lead_name=body.lead_name or lead.name or phone,
+    )
+
+    if success:
+        logger.info(f"[AdaptiqRegister] Trial started for {phone} ({body.lead_name})")
+        return {"success": True, "message": "Trial started! Check WhatsApp for your Day 1 message."}
+    else:
+        # Trial already exists — still return success
+        logger.info(f"[AdaptiqRegister] Trial already exists for {phone}")
+        return {"success": True, "message": "You already have an active trial! Check WhatsApp."}
+
+
 @app.get("/adaptiq/funnel")
 async def adaptiq_funnel():
     """Full 7-stage Adaptiq funnel with conversion rates."""
