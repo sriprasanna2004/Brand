@@ -696,7 +696,6 @@ async def list_trials(limit: int = 20):
                 "trial_end": t.trial_end.isoformat(),
                 "converted": t.converted_at is not None,
                 "plan": t.plan,
-                "weak_subjects": t.weak_subjects,
                 "improvement_pct": t.improvement_pct,
                 "day1_sent": bool(t.day1_sent), "day3_sent": bool(t.day3_sent),
                 "day5_sent": bool(t.day5_sent), "day7_sent": bool(t.day7_sent),
