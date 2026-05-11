@@ -129,6 +129,15 @@ async def trigger_analytics_crew():
     return {"task_id": task.id, "status": "queued"}
 
 
+@app.post("/tasks/trial-story")
+async def trigger_trial_story():
+    """Manually trigger the Adaptiq trial promo story post."""
+    from src.scheduler.tasks import run_trial_story_task
+    task = run_trial_story_task.delay()
+    logger.info(f"[API] Trial story triggered, task_id={task.id}")
+    return {"task_id": task.id, "status": "queued"}
+
+
 @app.post("/tasks/lead")
 async def trigger_lead_crew(body: LeadTaskRequest):
     from src.scheduler.tasks import run_lead_crew_task

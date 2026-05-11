@@ -183,6 +183,13 @@ def _trigger_insights_sync():
         logger.error(f"[Cron] Insights sync failed: {e}")
 
 
+def _trigger_trial_story():
+    """Sunday 9 AM — post Adaptiq trial promo story to Instagram."""
+    from src.scheduler.tasks import run_trial_story_task
+    logger.info("[Cron] Triggering Adaptiq trial story")
+    run_trial_story_task.delay()
+
+
 # ---------------------------------------------------------------------------
 # Scheduler setup
 # ---------------------------------------------------------------------------
@@ -263,6 +270,16 @@ def start_scheduler() -> BackgroundScheduler:
         replace_existing=True,
     )
 
+    # Weekly Adaptiq trial story — every Sunday at 9:00 AM IST
+    scheduler.add_job(
+        _trigger_trial_story,
+        trigger="cron",
+        day_of_week="sun",
+        hour=9, minute=0,
+        id="weekly_trial_story",
+        replace_existing=True,
+    )
+
     scheduler.start()
-    logger.info("[Scheduler] APScheduler started with 9 cron jobs")
+    logger.info("[Scheduler] APScheduler started with 10 cron jobs")
     return scheduler

@@ -270,3 +270,32 @@ def schedule_nurture_sequence(ig_handle: str, enrolled_at: datetime) -> None:
             f"[schedule_nurture_sequence] Day {day} queued for @{ig_handle} "
             f"at {eta.isoformat()}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Task 6: Weekly Adaptiq trial story promo
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    name="story.trial_promo",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=120,
+)
+def run_trial_story_task(self):
+    """Generate and post an Adaptiq trial promo story to Instagram."""
+    from src.tools.instagram_tool import create_and_post_trial_story
+    try:
+        story_id = run_async(create_and_post_trial_story())
+        if story_id:
+            logger.info(f"[story.trial_promo] Story posted: {story_id}")
+        else:
+            logger.warning("[story.trial_promo] Story post returned None")
+        return {"story_id": story_id}
+    except Exception as exc:
+        logger.error(f"[story.trial_promo] Failed: {exc}")
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            sentry_sdk.capture_exception(exc)
+            raise

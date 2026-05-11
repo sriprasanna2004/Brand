@@ -194,3 +194,145 @@ async def refresh_token() -> str:
     os.environ["META_ACCESS_TOKEN"] = new_token
     logger.info("[Instagram] Access token refreshed successfully")
     return new_token
+
+
+async def create_and_post_trial_story() -> str | None:
+    """
+    Generate a branded Adaptiq trial promo story image, overlay text,
+    upload to R2, then post to Instagram as a Story.
+    Returns the Instagram media ID or None on failure.
+    """
+    import io
+    import urllib.parse
+    from PIL import Image, ImageDraw, ImageFont
+
+    cfg = _cfg()
+    account_id = cfg["account_id"]
+    access_token = cfg["access_token"]
+
+    # ── Step 1: Generate 1080x1920 story image via Pollinations ─────────────
+    prompt = (
+        "Dark purple background #7c3aed, minimal clean design, "
+        "abstract geometric shapes, gradient purple to dark, "
+        "no people, no text, professional poster style"
+    )
+    encoded = urllib.parse.quote(prompt)
+    poll_url = (
+        f"https://image.pollinations.ai/prompt/{encoded}"
+        f"?width=1080&height=1920&nologo=true&seed=99"
+    )
+
+    logger.info("[StoryPromo] Generating story image via Pollinations")
+    try:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            resp = await client.get(poll_url)
+        if not resp.is_success:
+            raise Exception(f"Pollinations returned {resp.status_code}")
+        image_bytes = resp.content
+    except Exception as e:
+        logger.error(f"[StoryPromo] Image generation failed: {e}")
+        return None
+
+    # ── Step 2: Add text overlay with Pillow ─────────────────────────────────
+    def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+        candidates = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold
+            else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold
+            else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "arialbd.ttf" if bold else "arial.ttf",
+        ]
+        for p in candidates:
+            try:
+                return ImageFont.truetype(p, size)
+            except OSError:
+                continue
+        return ImageFont.load_default()
+
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+    w, h = img.size  # 1080 x 1920
+
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    # Semi-transparent dark overlay for readability
+    draw.rectangle([(0, 0), (w, h)], fill=(0, 0, 0, 120))
+
+    # Purple accent bar at top
+    draw.rectangle([(0, 0), (w, 10)], fill=(124, 58, 237, 255))
+    draw.rectangle([(0, h - 10), (w, h)], fill=(124, 58, 237, 255))
+
+    # Centre Y positions
+    center_x = w // 2
+
+    def draw_centered(text, y, font, color):
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw = bbox[2] - bbox[0]
+        draw.text(((w - tw) // 2, y), text, font=font, fill=color)
+
+    # "TOPPER IAS" — top
+    draw_centered("TOPPER IAS", 80, _font(32, bold=True), (255, 255, 255, 200))
+
+    # "Try Adaptiq" — large center
+    draw_centered("Try Adaptiq", h // 2 - 120, _font(96, bold=True), (255, 255, 255, 255))
+
+    # "FREE for 7 Days" — purple
+    draw_centered("FREE for 7 Days", h // 2 + 10, _font(56, bold=True), (167, 139, 250, 255))
+
+    # "AI-powered UPSC prep" — light gray
+    draw_centered("AI-powered UPSC prep", h // 2 + 100, _font(36), (200, 200, 220, 220))
+
+    # Divider line
+    line_y = h // 2 + 160
+    draw.rectangle([(center_x - 80, line_y), (center_x + 80, line_y + 2)],
+                   fill=(124, 58, 237, 180))
+
+    # "Link in bio 👆" — bottom
+    draw_centered("Link in bio 👆", h - 160, _font(40, bold=True), (255, 255, 255, 230))
+
+    result = Image.alpha_composite(img, overlay).convert("RGB")
+    buf = io.BytesIO()
+    result.save(buf, format="JPEG", quality=92)
+    story_bytes = buf.getvalue()
+
+    # ── Step 3: Upload to R2 ─────────────────────────────────────────────────
+    try:
+        from src.tools.storage_tool import upload_media, generate_filename
+        filename = generate_filename("adaptiq-trial-story", content_type="story")
+        story_url = upload_media(story_bytes, filename, content_type="image/jpeg")
+        logger.info(f"[StoryPromo] Story image uploaded: {story_url}")
+    except Exception as e:
+        logger.error(f"[StoryPromo] R2 upload failed: {e}")
+        return None
+
+    # ── Step 4: Create Instagram Story container ─────────────────────────────
+    try:
+        container = await _post(
+            f"{GRAPH_BASE}/{account_id}/media",
+            params={
+                "image_url": story_url,
+                "media_type": "IMAGE",
+                "access_token": access_token,
+            },
+        )
+        container_id = container["id"]
+        logger.info(f"[StoryPromo] Story container created: {container_id}")
+    except Exception as e:
+        logger.error(f"[StoryPromo] Story container creation failed: {e}")
+        return None
+
+    # ── Step 5: Publish the story ─────────────────────────────────────────────
+    try:
+        published = await _post(
+            f"{GRAPH_BASE}/{account_id}/media_publish",
+            params={
+                "creation_id": container_id,
+                "access_token": access_token,
+            },
+        )
+        story_id = published["id"]
+        logger.info(f"[StoryPromo] Story published: story_id={story_id}")
+        return story_id
+    except Exception as e:
+        logger.error(f"[StoryPromo] Story publish failed: {e}")
+        return None
