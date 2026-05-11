@@ -659,6 +659,17 @@ async def adaptiq_landing():
     return FileResponse(html_path, media_type="text/html")
 
 
+@app.get("/privacy")
+async def privacy_policy():
+    """Serve the Privacy Policy page."""
+    from fastapi.responses import FileResponse
+    import os
+    html_path = os.path.join(os.path.dirname(__file__), "privacy.html")
+    if not os.path.exists(html_path):
+        return {"error": f"HTML file not found at {html_path}"}
+    return FileResponse(html_path, media_type="text/html")
+
+
 class AdaptiqRegisterRequest(BaseModel):
     lead_name: str
     phone: str

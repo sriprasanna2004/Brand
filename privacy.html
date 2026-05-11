@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Privacy Policy — TOPPER IAS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#07080f;
+  --surface:#0d0f1a;
+  --border:#1c1f32;
+  --purple:#7c3aed;
+  --purple-light:#9d6fff;
+  --text:#e8eaf6;
+  --muted:#6b7280;
+  --green:#00e5c3;
+}
+body{
+  font-family:'DM Sans',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  line-height:1.7;
+}
+nav{
+  background:rgba(7,8,15,0.95);
+  border-bottom:1px solid var(--border);
+  padding:16px 24px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  position:sticky;
+  top:0;
+  z-index:10;
+}
+.nav-brand{
+  font-family:'Syne',sans-serif;
+  font-size:18px;
+  font-weight:800;
+  color:var(--purple-light);
+}
+.nav-sub{
+  font-family:'DM Mono',monospace;
+  font-size:9px;
+  color:var(--muted);
+  letter-spacing:2px;
+  text-transform:uppercase;
+  margin-top:2px;
+}
+.container{
+  max-width:720px;
+  margin:0 auto;
+  padding:48px 24px 80px;
+}
+.page-header{
+  margin-bottom:40px;
+  padding-bottom:32px;
+  border-bottom:1px solid var(--border);
+}
+.page-header h1{
+  font-family:'Syne',sans-serif;
+  font-size:32px;
+  font-weight:800;
+  letter-spacing:-1px;
+  margin-bottom:8px;
+}
+.page-header h1 span{
+  color:var(--purple-light);
+}
+.meta{
+  font-family:'DM Mono',monospace;
+  font-size:12px;
+  color:var(--muted);
+  letter-spacing:0.5px;
+}
+.intro{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-left:3px solid var(--purple);
+  border-radius:8px;
+  padding:20px 24px;
+  margin-bottom:40px;
+  font-size:15px;
+  color:var(--muted);
+  line-height:1.6;
+}
+section{margin-bottom:40px;}
+h2{
+  font-family:'Syne',sans-serif;
+  font-size:18px;
+  font-weight:700;
+  color:var(--text);
+  margin-bottom:14px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+h2::before{
+  content:'';
+  display:inline-block;
+  width:4px;
+  height:18px;
+  background:var(--purple);
+  border-radius:2px;
+  flex-shrink:0;
+}
+p{
+  font-size:15px;
+  color:#b0b4cc;
+  margin-bottom:12px;
+  line-height:1.7;
+}
+ul{
+  list-style:none;
+  padding:0;
+  margin-bottom:12px;
+}
+ul li{
+  font-size:15px;
+  color:#b0b4cc;
+  padding:6px 0 6px 20px;
+  position:relative;
+  line-height:1.6;
+}
+ul li::before{
+  content:'→';
+  position:absolute;
+  left:0;
+  color:var(--purple-light);
+  font-size:12px;
+  top:8px;
+}
+.highlight-box{
+  background:rgba(0,229,195,0.05);
+  border:1px solid rgba(0,229,195,0.15);
+  border-radius:10px;
+  padding:18px 20px;
+  margin:16px 0;
+}
+.highlight-box p{
+  margin:0;
+  color:var(--text);
+  font-size:14px;
+}
+.highlight-box strong{color:var(--green);}
+.opt-out-box{
+  background:rgba(124,58,237,0.08);
+  border:1px solid rgba(124,58,237,0.2);
+  border-radius:10px;
+  padding:20px 24px;
+  margin:16px 0;
+}
+.opt-out-box p{margin:0 0 8px;color:var(--text);}
+.opt-out-box p:last-child{margin:0;}
+.opt-out-box code{
+  background:rgba(124,58,237,0.15);
+  color:var(--purple-light);
+  padding:2px 8px;
+  border-radius:4px;
+  font-family:'DM Mono',monospace;
+  font-size:13px;
+}
+a{color:var(--purple-light);text-decoration:none;}
+a:hover{text-decoration:underline;}
+.contact-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:24px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.contact-row{
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  font-size:14px;
+}
+.contact-label{
+  font-family:'DM Mono',monospace;
+  font-size:11px;
+  color:var(--muted);
+  letter-spacing:1px;
+  text-transform:uppercase;
+  min-width:80px;
+  padding-top:2px;
+}
+.contact-value{color:var(--text);}
+footer{
+  border-top:1px solid var(--border);
+  padding:24px;
+  text-align:center;
+  font-family:'DM Mono',monospace;
+  font-size:11px;
+  color:var(--muted);
+  letter-spacing:1px;
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div>
+    <div class="nav-brand">TOPPER IAS</div>
+    <div class="nav-sub">Privacy Policy</div>
+  </div>
+</nav>
+
+<div class="container">
+
+  <div class="page-header">
+    <h1>Privacy <span>Policy</span></h1>
+    <div class="meta">Last updated: May 2026 &nbsp;·&nbsp; TOPPER IAS, Coimbatore, Tamil Nadu</div>
+  </div>
+
+  <div class="intro">
+    This Privacy Policy explains how TOPPER IAS ("we", "us", "our") collects, uses, and protects your personal information when you interact with us through Instagram, WhatsApp, or our Adaptiq platform. We are committed to protecting your privacy and handling your data responsibly.
+  </div>
+
+  <!-- Section 1 -->
+  <section>
+    <h2>Information We Collect</h2>
+    <p>We collect the following types of personal information when you interact with our services:</p>
+    <ul>
+      <li><strong>Instagram handle</strong> — when you send us a Direct Message or comment on our posts</li>
+      <li><strong>WhatsApp phone number</strong> — when you sign up for our free trial or nurture sequence</li>
+      <li><strong>Your name</strong> — when you provide it during registration or in conversation</li>
+      <li><strong>Message content</strong> — the text of DMs and comments you send us, used to understand your enquiry and respond appropriately</li>
+      <li><strong>Interaction data</strong> — which messages you opened, links you clicked, and responses you gave</li>
+    </ul>
+    <div class="highlight-box">
+      <p><strong>We do not collect</strong> payment card details, government IDs, or any sensitive personal data. We do not use cookies or tracking pixels on this page.</p>
+    </div>
+  </section>
+
+  <!-- Section 2 -->
+  <section>
+    <h2>How We Use Your Information</h2>
+    <p>Your information is used solely for the following purposes:</p>
+    <ul>
+      <li><strong>Responding to enquiries</strong> — when you ask about batch fees, admission, or courses, we use your contact details to reply with relevant information</li>
+      <li><strong>UPSC coaching marketing</strong> — sending you information about TOPPER IAS batches, study materials, and upcoming courses that match your interest</li>
+      <li><strong>Lead nurture sequences</strong> — sending a structured series of WhatsApp messages (Day 3, Day 7, Day 14) to help you make an informed decision about joining TOPPER IAS</li>
+      <li><strong>Adaptiq free trial</strong> — delivering your personalised 7-day AI-powered UPSC prep experience via WhatsApp</li>
+      <li><strong>Service improvement</strong> — understanding which content resonates with UPSC aspirants so we can create better educational material</li>
+    </ul>
+    <p>We do not sell, rent, or share your personal information with third parties for their own marketing purposes.</p>
+  </section>
+
+  <!-- Section 3 -->
+  <section>
+    <h2>WhatsApp Communications</h2>
+    <p>When you provide your WhatsApp number, you consent to receiving messages from TOPPER IAS including:</p>
+    <ul>
+      <li>Welcome messages and onboarding information</li>
+      <li>Study tips and UPSC preparation content</li>
+      <li>Information about batches, courses, and admissions</li>
+      <li>Adaptiq trial progress updates and reminders</li>
+    </ul>
+    <p>All WhatsApp messages are sent via the official Meta WhatsApp Business API. Message frequency varies — typically 1–3 messages per week during active sequences.</p>
+  </section>
+
+  <!-- Section 4 -->
+  <section>
+    <h2>How to Opt Out</h2>
+    <p>You can stop receiving WhatsApp messages from us at any time:</p>
+    <div class="opt-out-box">
+      <p><strong>Reply STOP</strong> to any WhatsApp message from us.</p>
+      <p>Send the word <code>STOP</code> and we will immediately remove you from all future communications. Your data will be marked as opted-out and no further messages will be sent.</p>
+    </div>
+    <p>You can also opt out by emailing us at <a href="mailto:topperias@gmail.com">topperias@gmail.com</a> with the subject "Opt Out" and your phone number or Instagram handle.</p>
+    <p>Opting out does not delete your data — see the Data Retention section below.</p>
+  </section>
+
+  <!-- Section 5 -->
+  <section>
+    <h2>Data Retention</h2>
+    <p>We retain your personal information for as long as necessary to provide our services and comply with legal obligations:</p>
+    <ul>
+      <li>Active leads and trial users — retained for the duration of your engagement with TOPPER IAS</li>
+      <li>Opted-out contacts — retained with opted-out status to ensure we do not contact you again</li>
+      <li>Message logs — retained for up to 12 months for service quality purposes</li>
+    </ul>
+    <p>To request deletion of your data, email us at <a href="mailto:topperias@gmail.com">topperias@gmail.com</a>.</p>
+  </section>
+
+  <!-- Section 6 -->
+  <section>
+    <h2>Data Security</h2>
+    <p>We take reasonable technical and organisational measures to protect your personal information against unauthorised access, loss, or misuse. Our systems are hosted on secure cloud infrastructure with encrypted connections (HTTPS).</p>
+    <p>However, no method of transmission over the internet is 100% secure. If you have concerns about the security of your data, please contact us.</p>
+  </section>
+
+  <!-- Section 7 -->
+  <section>
+    <h2>Third-Party Services</h2>
+    <p>We use the following third-party services to operate our platform:</p>
+    <ul>
+      <li><strong>Meta (Instagram / WhatsApp)</strong> — for receiving DMs and sending WhatsApp messages. Subject to <a href="https://www.facebook.com/privacy/policy/" target="_blank">Meta's Privacy Policy</a></li>
+      <li><strong>Groq AI</strong> — for generating personalised message content. No personal data is stored by Groq beyond the request</li>
+      <li><strong>Cloudflare R2</strong> — for storing generated images. Images are not linked to personal data</li>
+      <li><strong>Railway</strong> — for hosting our application infrastructure</li>
+    </ul>
+  </section>
+
+  <!-- Section 8 -->
+  <section>
+    <h2>Your Rights</h2>
+    <p>You have the right to:</p>
+    <ul>
+      <li>Access the personal information we hold about you</li>
+      <li>Request correction of inaccurate information</li>
+      <li>Request deletion of your personal data</li>
+      <li>Withdraw consent for marketing communications at any time</li>
+    </ul>
+    <p>To exercise any of these rights, contact us at <a href="mailto:topperias@gmail.com">topperias@gmail.com</a>.</p>
+  </section>
+
+  <!-- Section 9 -->
+  <section>
+    <h2>Contact Us</h2>
+    <p>If you have any questions about this Privacy Policy or how we handle your data, please reach out:</p>
+    <div class="contact-card">
+      <div class="contact-row">
+        <div class="contact-label">Company</div>
+        <div class="contact-value">TOPPER IAS</div>
+      </div>
+      <div class="contact-row">
+        <div class="contact-label">Location</div>
+        <div class="contact-value">Coimbatore, Tamil Nadu, India</div>
+      </div>
+      <div class="contact-row">
+        <div class="contact-label">Email</div>
+        <div class="contact-value"><a href="mailto:topperias@gmail.com">topperias@gmail.com</a></div>
+      </div>
+      <div class="contact-row">
+        <div class="contact-label">Instagram</div>
+        <div class="contact-value"><a href="https://instagram.com/topperias" target="_blank">@topperias</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 10 -->
+  <section>
+    <h2>Changes to This Policy</h2>
+    <p>We may update this Privacy Policy from time to time. When we do, we will update the "Last updated" date at the top of this page. Continued use of our services after changes constitutes acceptance of the updated policy.</p>
+  </section>
+
+</div>
+
+<footer>
+  © 2026 TOPPER IAS · Coimbatore, Tamil Nadu · <a href="mailto:topperias@gmail.com">topperias@gmail.com</a>
+</footer>
+
+</body>
+</html>
