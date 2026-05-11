@@ -266,21 +266,25 @@ async def create_and_post_trial_story() -> str | None:
     center_x = w // 2
 
     def draw_centered(text, y, font, color):
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw = bbox[2] - bbox[0]
-        draw.text(((w - tw) // 2, y), text, font=font, fill=color)
+        try:
+            tw = draw.textlength(text, font=font)
+        except Exception:
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw = bbox[2] - bbox[0]
+        x = (w - tw) / 2
+        draw.text((x, y), text, font=font, fill=color)
 
     # "TOPPER IAS" — top
-    draw_centered("TOPPER IAS", 80, _font(32, bold=True), (255, 255, 255, 200))
+    draw_centered("TOPPER IAS", 80, _font(18, bold=True), (255, 255, 255, 200))
 
     # "Try Adaptiq" — large center
-    draw_centered("Try Adaptiq", h // 2 - 120, _font(96, bold=True), (255, 255, 255, 255))
+    draw_centered("Try Adaptiq", h // 2 - 120, _font(36, bold=True), (255, 255, 255, 255))
 
     # "FREE for 7 Days" — purple
-    draw_centered("FREE for 7 Days", h // 2 + 10, _font(56, bold=True), (167, 139, 250, 255))
+    draw_centered("FREE for 7 Days", h // 2 + 10, _font(28, bold=True), (167, 139, 250, 255))
 
     # "AI-powered UPSC prep" — light gray
-    draw_centered("AI-powered UPSC prep", h // 2 + 100, _font(36), (200, 200, 220, 220))
+    draw_centered("AI-powered UPSC prep", h // 2 + 100, _font(20), (200, 200, 220, 220))
 
     # Divider line
     line_y = h // 2 + 160
@@ -288,7 +292,7 @@ async def create_and_post_trial_story() -> str | None:
                    fill=(124, 58, 237, 180))
 
     # "Link in bio 👆" — bottom
-    draw_centered("Link in bio 👆", h - 160, _font(40, bold=True), (255, 255, 255, 230))
+    draw_centered("Link in bio", h - 160, _font(22, bold=True), (255, 255, 255, 230))
 
     result = Image.alpha_composite(img, overlay).convert("RGB")
     buf = io.BytesIO()
