@@ -336,7 +336,21 @@ async def create_and_post_trial_story() -> str | None:
         )
         story_id = published["id"]
         logger.info(f"[StoryPromo] Story published: story_id={story_id}")
-        return story_id
     except Exception as e:
         logger.error(f"[StoryPromo] Story publish failed: {e}")
         return None
+
+    # ── Step 6: Cross-post to Facebook Page ──────────────────────────────────
+    try:
+        from src.tools.facebook_tool import post_to_facebook
+        fb_caption = (
+            "🎯 Try Adaptiq FREE for 7 Days — AI-powered UPSC prep that finds your "
+            "weak areas instantly. Link in bio 👆 #UPSC #IAS #Adaptiq #TopperIAS"
+        )
+        fb_post_id = await post_to_facebook(message=fb_caption, image_url=story_url)
+        if fb_post_id:
+            logger.info(f"[StoryPromo] Cross-posted to Facebook: {fb_post_id}")
+    except Exception as e:
+        logger.warning(f"[StoryPromo] Facebook cross-post failed (non-critical): {e}")
+
+    return story_id
