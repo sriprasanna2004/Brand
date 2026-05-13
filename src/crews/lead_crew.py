@@ -86,17 +86,30 @@ async def run_lead_crew(
             db.commit()
             db.refresh(lead)
 
-            # ── Step 1: Instant Instagram DM auto-reply ──────────────────
+            # ── Step 1: Instant auto-reply ──────────────────────────────
             if score.auto_reply_message and score.status.value in ("hot", "warm"):
-                from src.scheduler.tasks import send_instant_ig_reply_task
-                send_instant_ig_reply_task.delay(
-                    ig_user_id=ig_handle,
-                    message=score.auto_reply_message,
-                )
-                logger.info(
-                    f"[LeadCrew] Instant IG reply queued for @{ig_handle} "
-                    f"(status={score.status.value})"
-                )
+                if lead.telegram_chat_id:
+                    # Lead came from Telegram — reply via Telegram bot directly
+                    import asyncio
+                    from src.tools.telegram_tool import send_direct_message
+                    try:
+                        asyncio.get_event_loop().run_until_complete(
+                            send_direct_message(
+                                chat_id=lead.telegram_chat_id,
+                                message=score.auto_reply_message,
+                            )
+                        )
+                        logger.info(f"[LeadCrew] Instant Telegram reply sent to chat_id={lead.telegram_chat_id}")
+                    except Exception as e:
+                        logger.warning(f"[LeadCrew] Telegram auto-reply failed: {e}")
+                else:
+                    # Lead came from Instagram — reply via Instagram DM
+                    from src.scheduler.tasks import send_instant_ig_reply_task
+                    send_instant_ig_reply_task.delay(
+                        ig_user_id=ig_handle,
+                        message=score.auto_reply_message,
+                    )
+                    logger.info(f"[LeadCrew] Instant IG reply queued for @{ig_handle} (status={score.status.value})")
 
             # ── Step 2: Notify admin for hot leads ───────────────────────
             if score.should_notify_admin:
