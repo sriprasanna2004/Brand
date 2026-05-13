@@ -451,3 +451,55 @@ def run_daily_landing_promo_task(self):
 
     logger.info(f"[DailyPromo] Daily landing promo complete: {results}")
     return results
+
+
+# ---------------------------------------------------------------------------
+# Task 8: Publish all pending due posts (replaces cron direct call)
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    name="publish.pending",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=60,
+)
+def run_publish_pending_task(self):
+    """Publish all pending posts whose scheduled_at is now or in the past."""
+    from src.tools.post_publisher import publish_pending_posts
+    try:
+        published = run_async(publish_pending_posts())
+        logger.info(f"[publish.pending] Published {len(published)} posts: {published}")
+        return {"published": published, "count": len(published)}
+    except Exception as exc:
+        logger.error(f"[publish.pending] Failed: {exc}")
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            sentry_sdk.capture_exception(exc)
+            raise
+
+
+# ---------------------------------------------------------------------------
+# Task 9: Publish a single specific post immediately
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    name="publish.single",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+)
+def run_publish_post_task(self, post_id: str):
+    """Immediately publish a specific post by ID."""
+    from src.tools.post_publisher import publish_single_post
+    try:
+        success = run_async(publish_single_post(post_id))
+        logger.info(f"[publish.single] post_id={post_id} success={success}")
+        return {"post_id": post_id, "published": success}
+    except Exception as exc:
+        logger.error(f"[publish.single] post_id={post_id} failed: {exc}")
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            sentry_sdk.capture_exception(exc)
+            raise

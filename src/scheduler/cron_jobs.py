@@ -56,9 +56,9 @@ def _trigger_analytics_crew():
 
 
 def _trigger_publish_pending():
-    from src.tools.post_publisher import publish_pending_posts
-    logger.info("[Cron] Publishing pending posts")
-    _run_async(publish_pending_posts())
+    from src.scheduler.tasks import run_publish_pending_task
+    logger.info("[Cron] Triggering publish pending posts")
+    run_publish_pending_task.delay()
 
 
 def _trigger_community_broadcast():

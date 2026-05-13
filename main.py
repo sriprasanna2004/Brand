@@ -202,11 +202,19 @@ async def approve_post(body: ApprovePostRequest):
 
 @app.post("/posts/publish/{post_id}")
 async def publish_post_now(post_id: str):
-    from src.tools.post_publisher import publish_single_post
-    success = await publish_single_post(post_id)
-    if success:
-        return {"post_id": post_id, "published": True}
-    return {"post_id": post_id, "published": False, "error": "Publish failed"}
+    """Queue a specific post for immediate publishing via Celery."""
+    from src.scheduler.tasks import run_publish_post_task
+    task = run_publish_post_task.delay(post_id=post_id)
+    return {"post_id": post_id, "task_id": task.id, "status": "queued"}
+
+
+@app.post("/tasks/publish-pending")
+async def trigger_publish_pending():
+    """Manually trigger publishing of all pending due posts."""
+    from src.scheduler.tasks import run_publish_pending_task
+    task = run_publish_pending_task.delay()
+    logger.info(f"[API] Publish pending triggered, task_id={task.id}")
+    return {"task_id": task.id, "status": "queued"}
 
 
 @app.get("/leads")
@@ -896,7 +904,7 @@ async def list_admissions(limit: int = 20):
 async def sync_insights():
     """Pull Instagram Insights for all posted posts."""
     from src.tools.analytics_tool import sync_post_analytics
-    updated = await sync_post_analytics()
+    updated = sync_post_analytics()
     return {"updated": updated}
 
 
