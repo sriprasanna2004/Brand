@@ -178,32 +178,52 @@ async def run_lead_crew(
             intent_keywords=intent_keywords,
         )
 
-        # Send via WhatsApp if phone is available
+        # Send via Telegram if chat_id available, else WhatsApp, else just log
+        tg_sent = False
         wa_sent = False
-        if lead.phone:
+
+        if lead.telegram_chat_id:
+            import asyncio
+            from src.tools.telegram_tool import send_direct_message
+            try:
+                tg_sent = asyncio.get_event_loop().run_until_complete(
+                    send_direct_message(chat_id=lead.telegram_chat_id, message=nurture.message)
+                )
+                logger.info(
+                    f"[LeadCrew] Telegram Day {day_number} {'sent' if tg_sent else 'FAILED'} "
+                    f"to chat_id={lead.telegram_chat_id}"
+                )
+            except Exception as e:
+                logger.error(f"[LeadCrew] Telegram send failed: {e}")
+
+        if not tg_sent and lead.phone:
             import asyncio
             from src.tools.whatsapp_tool import send_text_message
             try:
                 wa_sent = asyncio.get_event_loop().run_until_complete(
                     send_text_message(phone=lead.phone, message=nurture.message)
                 )
+                logger.info(
+                    f"[LeadCrew] WhatsApp Day {day_number} {'sent' if wa_sent else 'FAILED'} "
+                    f"to {lead.phone}"
+                )
             except Exception as e:
                 logger.error(f"[LeadCrew] WhatsApp send failed: {e}")
-            logger.info(
-                f"[LeadCrew] WhatsApp Day {day_number} {'sent' if wa_sent else 'FAILED'} "
-                f"to {lead.phone}"
-            )
-        else:
+
+        if not tg_sent and not wa_sent:
             logger.warning(
-                f"[LeadCrew] No phone for @{ig_handle} — message generated but not sent via WhatsApp"
+                f"[LeadCrew] No Telegram chat_id or phone for @{ig_handle} — "
+                f"message generated but not delivered"
             )
+
+        sent = tg_sent or wa_sent
 
         seq = WhatsappSequence(
             id=uuid.uuid4(),
             lead_id=lead.id,
             day_number=day_number,
             template_name=nurture.template_name,
-            status=SequenceStatus.sent if wa_sent or not lead.phone else SequenceStatus.failed,
+            status=SequenceStatus.sent if sent else SequenceStatus.failed,
         )
         db.add(seq)
 
@@ -212,7 +232,7 @@ async def run_lead_crew(
         db.commit()
 
         logger.info(f"[LeadCrew] Day {day_number} nurture complete, template={nurture.template_name}")
-        return {**nurture.model_dump(), "wa_sent": wa_sent}
+        return {**nurture.model_dump(), "tg_sent": tg_sent, "wa_sent": wa_sent}
 
     except Exception as e:
         logger.error(f"[LeadCrew] Failed job_id={job_id}: {e}")

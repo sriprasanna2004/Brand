@@ -82,6 +82,8 @@ class Lead(Base):
     nurture_enrolled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Intent keywords that triggered the nurture (comma-separated, for context)
     intent_keywords: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Telegram chat_id — set when lead messages the Telegram bot directly
+    telegram_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 

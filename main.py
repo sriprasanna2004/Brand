@@ -1259,3 +1259,38 @@ async def instagram_webhook(request: Request):
     payload = await request.json()
     result = await handle_instagram_event(payload)
     return JSONResponse(status_code=200, content=result)
+
+
+@app.post("/webhook/telegram")
+async def telegram_webhook(request: Request):
+    """
+    Telegram bot webhook — receives messages from leads who message the bot.
+    Set this URL in BotFather: /setwebhook
+    URL: https://hospitable-comfort-production.up.railway.app/webhook/telegram
+    """
+    from src.tools.telegram_tool import handle_telegram_message
+    update = await request.json()
+    result = await handle_telegram_message(update)
+    return JSONResponse(status_code=200, content=result)
+
+
+@app.get("/webhook/telegram/setup")
+async def setup_telegram_webhook():
+    """
+    One-click setup: registers this server as the Telegram bot webhook.
+    Call this once after deployment.
+    """
+    import httpx
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    if not token:
+        return {"error": "TELEGRAM_BOT_TOKEN not set"}
+
+    webhook_url = "https://hospitable-comfort-production.up.railway.app/webhook/telegram"
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(
+            f"https://api.telegram.org/bot{token}/setWebhook",
+            json={"url": webhook_url, "allowed_updates": ["message"]},
+        )
+    data = resp.json()
+    logger.info(f"[Telegram] Webhook setup: {data}")
+    return data
