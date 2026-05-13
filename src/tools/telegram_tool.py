@@ -126,9 +126,12 @@ async def handle_telegram_message(update: dict) -> dict:
         db = Session()
 
         try:
-            # Try to find existing lead by telegram chat_id or username
-            lead = None
-            if username:
+            # Look up by telegram_chat_id first (most reliable), then by username
+            lead = db.execute(
+                sa_select(Lead).where(Lead.telegram_chat_id == chat_id)
+            ).scalar_one_or_none()
+
+            if not lead and username:
                 lead = db.execute(
                     sa_select(Lead).where(Lead.ig_handle == f"tg_{username}")
                 ).scalar_one_or_none()
