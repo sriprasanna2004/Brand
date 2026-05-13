@@ -138,6 +138,15 @@ async def trigger_trial_story():
     return {"task_id": task.id, "status": "queued"}
 
 
+@app.post("/tasks/landing-promo")
+async def trigger_landing_promo():
+    """Manually trigger the daily Adaptiq landing page promo."""
+    from src.scheduler.tasks import run_daily_landing_promo_task
+    task = run_daily_landing_promo_task.delay()
+    logger.info(f"[API] Landing promo triggered, task_id={task.id}")
+    return {"task_id": task.id, "status": "queued"}
+
+
 @app.post("/tasks/lead")
 async def trigger_lead_crew(body: LeadTaskRequest):
     from src.scheduler.tasks import run_lead_crew_task

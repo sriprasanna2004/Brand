@@ -299,3 +299,155 @@ def run_trial_story_task(self):
         except self.MaxRetriesExceededError:
             sentry_sdk.capture_exception(exc)
             raise
+
+
+# ---------------------------------------------------------------------------
+# Task 7: Daily Adaptiq landing page promo
+# Shares the trial signup link on Telegram community + WhatsApp broadcast
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    name="promo.daily_landing",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=60,
+)
+def run_daily_landing_promo_task(self):
+    """
+    Post the Adaptiq landing page link daily across:
+    - Telegram community channel
+    - WhatsApp broadcast (to all leads with phone numbers)
+    """
+    import os
+
+    LANDING_URL = os.getenv(
+        "ADAPTIQ_LANDING_URL",
+        "https://hospitable-comfort-production.up.railway.app/adaptiq"
+    )
+
+    PROMO_MESSAGES = [
+        (
+            f"🎯 Want to crack UPSC faster?\n\n"
+            f"Try Adaptiq FREE for 7 days — AI that finds your weak areas and builds a personalised study plan.\n\n"
+            f"👉 Start here: {LANDING_URL}\n\n"
+            f"#UPSC #IAS #TopperIAS #Adaptiq"
+        ),
+        (
+            f"📚 UPSC aspirants — this is for you.\n\n"
+            f"Adaptiq analyses your weak subjects and gives you a day-by-day plan to fix them.\n"
+            f"7-day free trial. No credit card.\n\n"
+            f"👉 {LANDING_URL}\n\n"
+            f"#UPSCPreparation #IASAspirant #TopperIAS"
+        ),
+        (
+            f"💡 Did you know?\n\n"
+            f"Students who use Adaptiq improve their mock scores by 22% in the first week.\n\n"
+            f"Try it free for 7 days 👇\n"
+            f"{LANDING_URL}\n\n"
+            f"#UPSC #CivilServices #Adaptiq #TopperIAS"
+        ),
+        (
+            f"🚀 Free 7-day UPSC prep trial — limited time.\n\n"
+            f"Adaptiq by TOPPER IAS:\n"
+            f"✅ Personalised study plan\n"
+            f"✅ Weak area analysis\n"
+            f"✅ Daily practice tests\n\n"
+            f"Sign up free: {LANDING_URL}\n\n"
+            f"#IAS #UPSC #TopperIAS"
+        ),
+        (
+            f"⏰ Your UPSC preparation starts today.\n\n"
+            f"Adaptiq gives you a personalised AI study plan based on your weak areas.\n"
+            f"First 7 days completely free.\n\n"
+            f"👉 {LANDING_URL}\n\n"
+            f"#UPSC #IASPreparation #Adaptiq"
+        ),
+        (
+            f"🏆 Priya Sharma cracked UPSC in her first attempt.\n\n"
+            f"She used Adaptiq to identify her weak areas in Polity and Economy.\n"
+            f"You can too — try it free for 7 days.\n\n"
+            f"👉 {LANDING_URL}\n\n"
+            f"#UPSCTopper #IAS #TopperIAS #Adaptiq"
+        ),
+        (
+            f"📊 Your UPSC score depends on fixing your weak areas.\n\n"
+            f"Adaptiq finds them in 20 minutes and builds your study plan.\n"
+            f"Free for 7 days — no commitment.\n\n"
+            f"Start now: {LANDING_URL}\n\n"
+            f"#UPSC #IAS #StudyPlan #TopperIAS"
+        ),
+    ]
+
+    # Rotate message based on day of week (0=Mon, 6=Sun)
+    from datetime import date
+    day_index = date.today().weekday()
+    message = PROMO_MESSAGES[day_index % len(PROMO_MESSAGES)]
+
+    results = {}
+
+    # ── 1. Telegram community broadcast ──────────────────────────────────────
+    async def _telegram():
+        from src.tools.telegram_tool import broadcast_to_community
+        community_chat_id = os.getenv("TELEGRAM_COMMUNITY_CHAT_ID", "")
+        if not community_chat_id:
+            logger.warning("[DailyPromo] TELEGRAM_COMMUNITY_CHAT_ID not set, skipping")
+            return False
+        return await broadcast_to_community(message, community_chat_id)
+
+    try:
+        tg_ok = run_async(_telegram())
+        results["telegram"] = "sent" if tg_ok else "failed"
+        logger.info(f"[DailyPromo] Telegram: {results['telegram']}")
+    except Exception as e:
+        results["telegram"] = f"error: {e}"
+        logger.error(f"[DailyPromo] Telegram failed: {e}")
+
+    # ── 2. WhatsApp to all leads with phone numbers ───────────────────────────
+    async def _whatsapp():
+        from sqlalchemy import create_engine, select as sa_select
+        from sqlalchemy.orm import sessionmaker
+        from src.models import Lead, LeadStatus
+        from src.tools.whatsapp_tool import send_text_message
+
+        db_url = os.getenv("DATABASE_URL_SYNC", "").replace("postgresql+asyncpg://", "postgresql://") \
+                 or os.getenv("DATABASE_URL", "").replace("postgresql+asyncpg://", "postgresql://")
+        engine = create_engine(db_url, pool_pre_ping=True)
+        Session = sessionmaker(bind=engine)
+        db = Session()
+
+        try:
+            leads = db.execute(
+                sa_select(Lead).where(
+                    Lead.phone.isnot(None),
+                    Lead.status != LeadStatus.opted_out,
+                )
+            ).scalars().all()
+        finally:
+            db.close()
+
+        sent = 0
+        # WhatsApp message — shorter, more personal
+        wa_message = (
+            f"Hi! 👋 TOPPER IAS here.\n\n"
+            f"Try Adaptiq FREE for 7 days — AI-powered UPSC prep that finds your weak areas.\n\n"
+            f"👉 {LANDING_URL}"
+        )
+        for lead in leads[:50]:  # cap at 50 per day to avoid spam flags
+            try:
+                ok = await send_text_message(phone=lead.phone, message=wa_message)
+                if ok:
+                    sent += 1
+            except Exception:
+                pass
+        return sent
+
+    try:
+        wa_sent = run_async(_whatsapp())
+        results["whatsapp"] = f"{wa_sent} sent"
+        logger.info(f"[DailyPromo] WhatsApp: {wa_sent} messages sent")
+    except Exception as e:
+        results["whatsapp"] = f"error: {e}"
+        logger.error(f"[DailyPromo] WhatsApp failed: {e}")
+
+    logger.info(f"[DailyPromo] Daily landing promo complete: {results}")
+    return results

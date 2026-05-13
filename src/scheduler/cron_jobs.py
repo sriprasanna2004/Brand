@@ -190,6 +190,13 @@ def _trigger_trial_story():
     run_trial_story_task.delay()
 
 
+def _trigger_daily_landing_promo():
+    """12 PM daily — share Adaptiq landing page on Telegram + WhatsApp."""
+    from src.scheduler.tasks import run_daily_landing_promo_task
+    logger.info("[Cron] Triggering daily landing page promo")
+    run_daily_landing_promo_task.delay()
+
+
 # ---------------------------------------------------------------------------
 # Scheduler setup
 # ---------------------------------------------------------------------------
@@ -280,6 +287,15 @@ def start_scheduler() -> BackgroundScheduler:
         replace_existing=True,
     )
 
+    # Daily landing page promo — every day at 12:00 PM IST
+    scheduler.add_job(
+        _trigger_daily_landing_promo,
+        trigger="cron",
+        hour=12, minute=0,
+        id="daily_landing_promo",
+        replace_existing=True,
+    )
+
     scheduler.start()
-    logger.info("[Scheduler] APScheduler started with 10 cron jobs")
+    logger.info("[Scheduler] APScheduler started with 11 cron jobs")
     return scheduler
