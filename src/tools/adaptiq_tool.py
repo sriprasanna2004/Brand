@@ -1,23 +1,33 @@
 """
-Adaptiq funnel tool — manages the full 7-day trial → paid conversion sequence.
-Tracks: source post, weak subjects, improvement %, webinar, demo, payment intent.
-Sends via: WhatsApp + Telegram admin alert on conversion.
+Adaptiq funnel tool — manages the full 7-day trial -> paid conversion sequence.
 """
+import os
 import uuid
 import random
 from datetime import datetime, timezone, timedelta
 
 from loguru import logger
-from sqlalchemy import select, text
+from sqlalchemy import create_engine, select as sa_select, text
+from sqlalchemy.orm import sessionmaker
 
 from src.database import AsyncSessionLocal
 from src.models import AgentJob, JobStatus, AdaptiqTrial, Lead, LeadStatus
 
-# All 7 trial days
 TRIAL_DAYS = (1, 2, 3, 4, 5, 6, 7)
-DAY_SENT_COL = {1: "day1_sent", 2: "day1_sent", 3: "day3_sent",
-                4: "day3_sent", 5: "day5_sent", 6: "day5_sent", 7: "day7_sent"}
 
+
+def _get_sync_session():
+    db_url = os.getenv("DATABASE_URL_SYNC", "")
+    if not db_url:
+        db_url = os.getenv("DATABASE_URL", "").replace("postgresql+asyncpg://", "postgresql://")
+    engine = create_engine(db_url, pool_pre_ping=True)
+    Session = sessionmaker(bind=engine)
+    return Session()
+
+
+# ---------------------------------------------------------------------------
+# start_trial — called from FastAPI (async context) — keep async
+# ---------------------------------------------------------------------------
 
 async def start_trial(
     lead_id: str,
@@ -31,7 +41,9 @@ async def start_trial(
 
     async with AsyncSessionLocal() as db:
         now = datetime.now(timezone.utc)
-        existing = await db.scalar(select(AdaptiqTrial).where(AdaptiqTrial.lead_id == uuid.UUID(lead_id)))
+        existing = await db.scalar(
+            sa_select(AdaptiqTrial).where(AdaptiqTrial.lead_id == uuid.UUID(lead_id))
+        )
         if existing:
             logger.info(f"[Adaptiq] Trial already exists for lead_id={lead_id}")
             return False
@@ -55,33 +67,48 @@ async def start_trial(
         if lead_phone:
             await send_text_message(phone=lead_phone, message=msg.message)
         logger.info(f"[Adaptiq] Day 1 message sent to {lead_phone or 'no phone'}")
-        # Mark day1 sent
-        async with AsyncSessionLocal() as db:
-            t = await db.scalar(select(AdaptiqTrial).where(AdaptiqTrial.lead_id == uuid.UUID(lead_id)))
+
+        # Mark day1 sent using sync DB to avoid event loop issues
+        db = _get_sync_session()
+        try:
+            t = db.execute(
+                sa_select(AdaptiqTrial).where(AdaptiqTrial.lead_id == uuid.UUID(lead_id))
+            ).scalar_one_or_none()
             if t:
                 t.day1_sent = True
-                await db.commit()
+                db.commit()
+        finally:
+            db.close()
+
         return True
     except Exception as e:
         logger.error(f"[Adaptiq] start_trial Day 1 message failed: {e}")
         return False
 
 
+# ---------------------------------------------------------------------------
+# run_trial_sequences — called from Celery cron (sync context) — use sync DB
+# ---------------------------------------------------------------------------
+
 async def run_trial_sequences() -> int:
+    """
+    Send daily Adaptiq promo messages to active trial users.
+    Uses sync DB to avoid asyncpg event loop conflicts in Celery workers.
+    """
     from src.agents.adaptiq_promo_agent import run_adaptiq_promo_agent
     from src.tools.whatsapp_tool import send_text_message
 
     now = datetime.now(timezone.utc)
     sent_count = 0
 
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(AdaptiqTrial).where(
+    db = _get_sync_session()
+    try:
+        trials = db.execute(
+            sa_select(AdaptiqTrial).where(
                 AdaptiqTrial.converted_at.is_(None),
                 AdaptiqTrial.trial_end >= now,
             )
-        )
-        trials = result.scalars().all()
+        ).scalars().all()
         logger.info(f"[Adaptiq] Processing {len(trials)} active trial(s)")
 
         for trial in trials:
@@ -89,12 +116,16 @@ async def run_trial_sequences() -> int:
             if trial_day not in TRIAL_DAYS:
                 continue
 
-            lead = await db.scalar(select(Lead).where(Lead.id == trial.lead_id))
+            lead = db.execute(
+                sa_select(Lead).where(Lead.id == trial.lead_id)
+            ).scalar_one_or_none()
             if not lead:
                 continue
 
             job_id = f"adaptiq_{lead.id}_day{trial_day}"
-            already = await db.scalar(select(AgentJob).where(AgentJob.job_id == job_id))
+            already = db.execute(
+                sa_select(AgentJob).where(AgentJob.job_id == job_id)
+            ).scalar_one_or_none()
             if already:
                 continue
 
@@ -104,15 +135,14 @@ async def run_trial_sequences() -> int:
                 payload={"lead_id": str(lead.id), "trial_day": trial_day},
             )
             db.add(job)
-            await db.commit()
+            db.commit()
 
             try:
-                # Simulate improvement on Day 5+ (real app would pull from Adaptiq API)
                 improvement = trial.improvement_pct or 0
                 if trial_day >= 5 and improvement == 0:
                     improvement = random.randint(15, 25)
                     trial.improvement_pct = improvement
-                    await db.commit()
+                    db.commit()
 
                 msg = run_adaptiq_promo_agent(
                     lead_name=lead.name or lead.ig_handle,
@@ -123,14 +153,16 @@ async def run_trial_sequences() -> int:
                 )
 
                 if lead.phone:
-                    await send_text_message(phone=lead.phone, message=msg.message)
+                    import asyncio
+                    asyncio.get_event_loop().run_until_complete(
+                        send_text_message(phone=lead.phone, message=msg.message)
+                    )
 
                 job.status = JobStatus.success
                 job.completed_at = now
                 sent_count += 1
-                logger.info(f"[Adaptiq] Day {trial_day} sent to {lead.ig_handle}, urgency={msg.urgency_level}")
+                logger.info(f"[Adaptiq] Day {trial_day} sent to {lead.ig_handle}")
 
-        # Mark webinar/demo stages
                 if trial_day == 4:
                     trial.webinar_attended = True
                 if trial_day == 6:
@@ -144,7 +176,13 @@ async def run_trial_sequences() -> int:
                 job.completed_at = now
                 logger.error(f"[Adaptiq] Day {trial_day} failed for {lead.id}: {e}")
 
-            await db.commit()
+            db.commit()
+
+    except Exception as e:
+        logger.error(f"[Adaptiq] run_trial_sequences failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
     return sent_count
 
@@ -153,13 +191,15 @@ async def mark_converted(lead_id: str, plan: str) -> bool:
     from src.tools.telegram_tool import send_admin_alert
     now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as db:
-        trial = await db.scalar(select(AdaptiqTrial).where(AdaptiqTrial.lead_id == uuid.UUID(lead_id)))
+        trial = await db.scalar(
+            sa_select(AdaptiqTrial).where(AdaptiqTrial.lead_id == uuid.UUID(lead_id))
+        )
         if trial:
             trial.converted_at = now
             trial.plan = plan
             trial.payment_initiated = True
 
-        lead = await db.scalar(select(Lead).where(Lead.id == uuid.UUID(lead_id)))
+        lead = await db.scalar(sa_select(Lead).where(Lead.id == uuid.UUID(lead_id)))
         if lead:
             lead.status = LeadStatus.hot
             lead.updated_at = now
@@ -169,7 +209,7 @@ async def mark_converted(lead_id: str, plan: str) -> bool:
 
         await db.commit()
 
-    logger.info(f"[Adaptiq] Conversion: {name} → {plan}")
+    logger.info(f"[Adaptiq] Conversion: {name} -> {plan}")
     try:
         price = "₹1,999" if "annual" in plan.lower() else "₹299"
         await send_admin_alert(f"🎉 Adaptiq Conversion!\n{name} upgraded to {plan} ({price})")
@@ -179,18 +219,18 @@ async def mark_converted(lead_id: str, plan: str) -> bool:
 
 
 async def get_funnel_stats() -> dict:
-    """Return full 7-stage funnel with conversion rates and drop-off."""
+    """Return full 7-stage funnel with conversion rates."""
     async with AsyncSessionLocal() as db:
         try:
             r = await db.execute(text("""
                 SELECT
                     COUNT(*) as total_trials,
-                    SUM(CASE WHEN day1_sent=1 THEN 1 ELSE 0 END) as day1,
-                    SUM(CASE WHEN day3_sent=1 THEN 1 ELSE 0 END) as day3,
-                    SUM(CASE WHEN webinar_attended=1 THEN 1 ELSE 0 END) as webinar,
-                    SUM(CASE WHEN day5_sent=1 THEN 1 ELSE 0 END) as day5,
-                    SUM(CASE WHEN demo_booked=1 THEN 1 ELSE 0 END) as demo,
-                    SUM(CASE WHEN payment_initiated=1 THEN 1 ELSE 0 END) as payment,
+                    SUM(CASE WHEN day1_sent THEN 1 ELSE 0 END) as day1,
+                    SUM(CASE WHEN day3_sent THEN 1 ELSE 0 END) as day3,
+                    SUM(CASE WHEN webinar_attended THEN 1 ELSE 0 END) as webinar,
+                    SUM(CASE WHEN day5_sent THEN 1 ELSE 0 END) as day5,
+                    SUM(CASE WHEN demo_booked THEN 1 ELSE 0 END) as demo,
+                    SUM(CASE WHEN payment_initiated THEN 1 ELSE 0 END) as payment,
                     SUM(CASE WHEN converted_at IS NOT NULL THEN 1 ELSE 0 END) as converted,
                     AVG(improvement_pct) as avg_improvement
                 FROM adaptiq_trials
@@ -201,14 +241,14 @@ async def get_funnel_stats() -> dict:
             return {
                 "total_trials": total,
                 "stages": [
-                    {"label": "Free Trial Started", "value": total, "pct": 100, "color": "#00e5c3"},
-                    {"label": "Day 1 Onboarded", "value": row[1] or 0, "pct": pct(row[1]), "color": "#00e5c3"},
-                    {"label": "Day 3 Weak Areas", "value": row[2] or 0, "pct": pct(row[2]), "color": "#4facfe"},
-                    {"label": "Webinar Attended", "value": row[3] or 0, "pct": pct(row[3]), "color": "#9d6fff"},
-                    {"label": "Day 5 Progress", "value": row[4] or 0, "pct": pct(row[4]), "color": "#ffd166"},
-                    {"label": "Demo Booked", "value": row[5] or 0, "pct": pct(row[5]), "color": "#ffd166"},
-                    {"label": "Payment Initiated", "value": row[6] or 0, "pct": pct(row[6]), "color": "#ff6b6b"},
-                    {"label": "Paid Converted", "value": row[7] or 0, "pct": pct(row[7]), "color": "#ff6b6b"},
+                    {"label": "Free Trial Started",  "value": total,        "pct": 100,       "color": "#00e5c3"},
+                    {"label": "Day 1 Onboarded",     "value": row[1] or 0,  "pct": pct(row[1]), "color": "#00e5c3"},
+                    {"label": "Day 3 Check-in",      "value": row[2] or 0,  "pct": pct(row[2]), "color": "#4facfe"},
+                    {"label": "Webinar Attended",    "value": row[3] or 0,  "pct": pct(row[3]), "color": "#9d6fff"},
+                    {"label": "Day 5 Progress",      "value": row[4] or 0,  "pct": pct(row[4]), "color": "#ffd166"},
+                    {"label": "Demo Booked",         "value": row[5] or 0,  "pct": pct(row[5]), "color": "#ffd166"},
+                    {"label": "Payment Initiated",   "value": row[6] or 0,  "pct": pct(row[6]), "color": "#ff6b6b"},
+                    {"label": "Paid Converted",      "value": row[7] or 0,  "pct": pct(row[7]), "color": "#ff6b6b"},
                 ],
                 "avg_improvement_pct": round(float(row[8] or 0), 1),
                 "conversion_rate": pct(row[7]),
