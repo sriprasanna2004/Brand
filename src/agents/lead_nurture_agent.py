@@ -7,12 +7,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
 # ---------------------------------------------------------------------------
-# Day context — maps exactly to the event-driven nurture spec:
+# Day context — event-driven nurture via Telegram:
 #
-#  Day 0  → Instant Instagram auto-reply (handled in webhook_handler, not here)
-#  Day 3  → WhatsApp: "Try Adaptiq free for 7 days"
-#  Day 7  → WhatsApp: "Batch starting soon — limited seats"
-#  Day 14 → WhatsApp: Final nudge with topper testimonial
+#  Day 0  → Instant auto-reply (handled in webhook_handler)
+#  Day 3  → Telegram: "Try Adaptiq free for 7 days"
+#  Day 7  → Telegram: "Batch starting soon — limited seats"
+#  Day 14 → Telegram: Final nudge with topper testimonial
 # ---------------------------------------------------------------------------
 
 DAY_CONTEXT = {
@@ -78,20 +78,20 @@ def run_lead_nurture_agent(
     messages = [
         SystemMessage(content=(
             "You are an empathetic student counsellor for TOPPER IAS who understands the UPSC journey deeply. "
-            "Write WhatsApp messages that feel personal, warm, and motivating — never salesy or pushy. "
+            "Write Telegram messages that feel personal, warm, and motivating — never salesy or pushy. "
             "The lead originally asked about: {keywords}. Reference this naturally if it fits. "
             "Keep messages under 500 characters. "
             "Always return valid JSON only, no markdown, no explanation."
         ).format(keywords=keywords_str)),
         HumanMessage(content=(
-            f"Write a Day {day_number} WhatsApp nurture message for a UPSC aspirant.\n\n"
+            f"Write a Day {day_number} Telegram nurture message for a UPSC aspirant.\n\n"
             f"Lead name: {lead_name}\n"
             f"Lead status: {lead_status}\n"
             f"Original intent: {keywords_str}\n"
             f"Day {day_number} focus: {ctx['focus']}\n"
             f"Tone: {ctx['tone']}\n\n"
             "Return a JSON object with:\n"
-            "  message: WhatsApp message text (under 500 chars, use lead name, feel personal, include CTA link naturally)\n"
+            "  message: Telegram message text (under 500 chars, use lead name, feel personal, include CTA link naturally)\n"
             f"  template_name: 'day_{day_number}_nurture'\n"
             "  variables: dict of dynamic variables used (e.g. {{\"name\": \"{lead_name}\", \"cta\": \"{cta}\"}})\n"
             f"  cta_link: '{ctx['cta']}'"

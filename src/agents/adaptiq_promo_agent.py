@@ -105,7 +105,7 @@ def run_adaptiq_promo_agent(
             f"Tone: {ctx['tone']}\n"
             f"Urgency: {ctx['urgency']}\n\n"
             "Return a JSON object with:\n"
-            "  message: WhatsApp message (warm, personal, under 400 chars, use student name)\n"
+            "  message: Telegram message (warm, personal, under 400 chars, use student name)\n"
             f"  cta_link: '{ctx['cta']}'\n"
             "  subject_tips: list of 2-3 specific, actionable tips for their weak subjects (null for day 1 and 7)\n"
             f"  urgency_level: '{ctx['urgency']}'\n"

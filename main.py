@@ -689,62 +689,68 @@ async def privacy_policy():
 
 class AdaptiqRegisterRequest(BaseModel):
     lead_name: str
-    phone: str
+    telegram_username: str = ""
+    phone: str = ""
 
 
 @app.post("/adaptiq/register")
 async def adaptiq_register(body: AdaptiqRegisterRequest):
     """
-    One-shot endpoint for the landing page:
-    1. Creates or finds the lead by phone number
-    2. Starts the Adaptiq trial
-    3. Sends Day 1 WhatsApp message
+    One-shot endpoint for the Adaptiq landing page.
+    Finds or creates a lead by Telegram username, then starts the trial.
+    Day 1 message is sent via Telegram bot.
     """
     import uuid as _uuid
-    from sqlalchemy import select
+    from sqlalchemy import select, or_
     from src.database import AsyncSessionLocal
     from src.models import Lead, LeadStatus, LeadSource
     from src.tools.adaptiq_tool import start_trial
 
-    # Normalise phone
-    phone = body.phone.strip()
-    if not phone.startswith("+"):
-        phone = "+91" + phone.lstrip("0")
+    tg_username = body.telegram_username.strip().lstrip("@")
+    ig_handle = f"tg_{tg_username}" if tg_username else f"adaptiq_{body.phone[-10:]}"
 
     async with AsyncSessionLocal() as db:
-        # Find existing lead by phone or create new one
-        lead = await db.scalar(select(Lead).where(Lead.phone == phone))
+        # Find existing lead by telegram username handle
+        lead = await db.scalar(select(Lead).where(Lead.ig_handle == ig_handle))
         if not lead:
             lead = Lead(
                 id=_uuid.uuid4(),
-                ig_handle=f"adaptiq_{phone[-10:]}",
-                phone=phone,
+                ig_handle=ig_handle,
+                phone=body.phone or None,
                 name=body.lead_name,
                 status=LeadStatus.warm,
-                source=LeadSource.instagram_dm,
+                source=LeadSource.telegram,
+                # telegram_chat_id will be set when they message the bot
             )
             db.add(lead)
             await db.commit()
             await db.refresh(lead)
         else:
-            # Update name if provided
             if body.lead_name and not lead.name:
                 lead.name = body.lead_name
                 await db.commit()
 
     success = await start_trial(
         lead_id=str(lead.id),
-        lead_phone=phone,
-        lead_name=body.lead_name or lead.name or phone,
+        lead_phone=lead.phone or "",
+        lead_name=body.lead_name or lead.name or tg_username,
     )
 
+    bot_link = "https://t.me/brandiq_topper_bot"
     if success:
-        logger.info(f"[AdaptiqRegister] Trial started for {phone} ({body.lead_name})")
-        return {"success": True, "message": "Trial started! Check WhatsApp for your Day 1 message."}
+        logger.info(f"[AdaptiqRegister] Trial started for @{tg_username}")
+        return {
+            "success": True,
+            "message": f"Trial started! Message @brandiq_topper_bot on Telegram to receive your Day 1 study plan.",
+            "telegram_bot": bot_link,
+        }
     else:
-        # Trial already exists — still return success
-        logger.info(f"[AdaptiqRegister] Trial already exists for {phone}")
-        return {"success": True, "message": "You already have an active trial! Check WhatsApp."}
+        logger.info(f"[AdaptiqRegister] Trial already exists for @{tg_username}")
+        return {
+            "success": True,
+            "message": "You already have an active trial! Check Telegram @brandiq_topper_bot.",
+            "telegram_bot": bot_link,
+        }
 
 
 @app.get("/adaptiq/funnel")

@@ -578,8 +578,8 @@ footer{
           <input type="text" id="name" name="name" placeholder="e.g. Rahul Sharma" autocomplete="name" required/>
         </div>
         <div class="field">
-          <label for="phone">WhatsApp Number</label>
-          <input type="tel" id="phone" name="phone" placeholder="+91 98765 43210" autocomplete="tel" required/>
+          <label for="telegram">Your Telegram Username</label>
+          <input type="text" id="telegram" name="telegram" placeholder="@yourusername (message @brandiq_topper_bot first)" required/>
         </div>
         <button type="submit" class="submit-btn" id="submitBtn">
           <span id="btnText">Start My Free Trial →</span>
@@ -591,7 +591,7 @@ footer{
       <div class="result-box success" id="successBox">
         <div class="result-emoji">🎉</div>
         <div class="result-title">Trial Started!</div>
-        <div class="result-sub">Check WhatsApp for your Day 1 message. Your personalised UPSC study plan is on its way.</div>
+        <div class="result-sub">Check Telegram (<strong>@brandiq_topper_bot</strong>) for your Day 1 message. Your personalised UPSC study plan is on its way.</div>
       </div>
 
       <div class="result-box error" id="errorBox">
@@ -621,18 +621,11 @@ const API = 'https://hospitable-comfort-production.up.railway.app';
 document.getElementById('trialForm').addEventListener('submit', async function(e) {
   e.preventDefault();
 
-  const name  = document.getElementById('name').value.trim();
-  const phone = document.getElementById('phone').value.trim();
+  const name     = document.getElementById('name').value.trim();
+  const telegram = document.getElementById('telegram').value.trim().replace('@', '');
 
-  if (!name || !phone) {
-    showError('Please fill in both your name and WhatsApp number.');
-    return;
-  }
-
-  // Basic phone validation
-  const phoneClean = phone.replace(/\s/g, '');
-  if (phoneClean.length < 10) {
-    showError('Please enter a valid WhatsApp number with country code (e.g. +91 98765 43210).');
+  if (!name || !telegram) {
+    showError('Please fill in both your name and Telegram username.');
     return;
   }
 
@@ -640,19 +633,22 @@ document.getElementById('trialForm').addEventListener('submit', async function(e
   hideResults();
 
   try {
-    // Step 1: Register lead + start trial in one call
     const res = await fetch(`${API}/adaptiq/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         lead_name: name,
-        phone: phoneClean,
+        telegram_username: telegram,
+        phone: '',
       }),
     });
 
     const data = await res.json();
 
     if (res.ok && data.success) {
+      // Show bot link in success message
+      document.getElementById('successBox').querySelector('.result-sub').innerHTML =
+        'Now message <strong><a href="https://t.me/brandiq_topper_bot" target="_blank" style="color:#00e5c3">@brandiq_topper_bot</a></strong> on Telegram to receive your Day 1 personalised study plan.';
       showSuccess();
       document.getElementById('trialForm').style.display = 'none';
     } else {

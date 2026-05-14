@@ -191,7 +191,7 @@ async def run_lead_crew(
             intent_keywords=intent_keywords,
         )
 
-        # Send via Telegram if chat_id available, else WhatsApp, else just log
+        # Send via Telegram if chat_id available, else WhatsApp fallback, else log
         tg_sent = False
         wa_sent = False
 
@@ -226,10 +226,19 @@ async def run_lead_crew(
         if not tg_sent and not wa_sent:
             logger.warning(
                 f"[LeadCrew] No Telegram chat_id or phone for @{ig_handle} — "
-                f"message generated but not delivered"
+                f"message generated but not delivered. Lead needs to message @brandiq_topper_bot first."
             )
 
         sent = tg_sent or wa_sent
+                wa_sent = asyncio.get_event_loop().run_until_complete(
+                    send_text_message(phone=lead.phone, message=nurture.message)
+                )
+                logger.info(
+                    f"[LeadCrew] WhatsApp Day {day_number} {'sent' if wa_sent else 'FAILED'} "
+                    f"to {lead.phone}"
+                )
+            except Exception as e:
+                logger.error(f"[LeadCrew] WhatsApp send failed: {e}")
 
         seq = WhatsappSequence(
             id=uuid.uuid4(),

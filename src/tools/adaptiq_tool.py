@@ -37,7 +37,7 @@ async def start_trial(
     weak_subjects: list[str] = None,
 ) -> bool:
     from src.agents.adaptiq_promo_agent import run_adaptiq_promo_agent
-    from src.tools.whatsapp_tool import send_text_message
+    from src.tools.telegram_tool import send_direct_message
 
     async with AsyncSessionLocal() as db:
         now = datetime.now(timezone.utc)
@@ -64,11 +64,29 @@ async def start_trial(
             weak_subjects=weak_subjects or [],
             source_post="",
         )
-        if lead_phone:
-            await send_text_message(phone=lead_phone, message=msg.message)
-        logger.info(f"[Adaptiq] Day 1 message sent to {lead_phone or 'no phone'}")
 
-        # Mark day1 sent using sync DB to avoid event loop issues
+        # Send via Telegram if chat_id available, else WhatsApp fallback
+        sent = False
+        db_sync = _get_sync_session()
+        try:
+            lead_row = db_sync.execute(
+                sa_select(Lead).where(Lead.id == uuid.UUID(lead_id))
+            ).scalar_one_or_none()
+            tg_chat_id = lead_row.telegram_chat_id if lead_row else None
+        finally:
+            db_sync.close()
+
+        if tg_chat_id:
+            sent = await send_direct_message(chat_id=tg_chat_id, message=msg.message)
+            logger.info(f"[Adaptiq] Day 1 sent via Telegram to chat_id={tg_chat_id}")
+        elif lead_phone:
+            from src.tools.whatsapp_tool import send_text_message
+            sent = await send_text_message(phone=lead_phone, message=msg.message)
+            logger.info(f"[Adaptiq] Day 1 sent via WhatsApp to {lead_phone}")
+        else:
+            logger.warning(f"[Adaptiq] No Telegram chat_id or phone for lead_id={lead_id}")
+
+        # Mark day1 sent
         db = _get_sync_session()
         try:
             t = db.execute(
@@ -96,7 +114,7 @@ async def run_trial_sequences() -> int:
     Uses sync DB to avoid asyncpg event loop conflicts in Celery workers.
     """
     from src.agents.adaptiq_promo_agent import run_adaptiq_promo_agent
-    from src.tools.whatsapp_tool import send_text_message
+    from src.tools.telegram_tool import send_direct_message
 
     now = datetime.now(timezone.utc)
     sent_count = 0
@@ -152,11 +170,22 @@ async def run_trial_sequences() -> int:
                     source_post="",
                 )
 
-                if lead.phone:
+                # Send via Telegram if chat_id available, else WhatsApp fallback
+                if lead.telegram_chat_id:
+                    import asyncio
+                    asyncio.get_event_loop().run_until_complete(
+                        send_direct_message(chat_id=lead.telegram_chat_id, message=msg.message)
+                    )
+                    logger.info(f"[Adaptiq] Day {trial_day} sent via Telegram to {lead.ig_handle}")
+                elif lead.phone:
+                    from src.tools.whatsapp_tool import send_text_message
                     import asyncio
                     asyncio.get_event_loop().run_until_complete(
                         send_text_message(phone=lead.phone, message=msg.message)
                     )
+                    logger.info(f"[Adaptiq] Day {trial_day} sent via WhatsApp to {lead.phone}")
+                else:
+                    logger.warning(f"[Adaptiq] No Telegram or phone for {lead.ig_handle}")
 
                 job.status = JobStatus.success
                 job.completed_at = now
