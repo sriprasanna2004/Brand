@@ -196,10 +196,10 @@ async def run_lead_crew(
         wa_sent = False
 
         if lead.telegram_chat_id:
-            import asyncio
+            from src.scheduler.tasks import run_async
             from src.tools.telegram_tool import send_direct_message
             try:
-                tg_sent = asyncio.get_event_loop().run_until_complete(
+                tg_sent = run_async(
                     send_direct_message(chat_id=lead.telegram_chat_id, message=nurture.message)
                 )
                 logger.info(
@@ -210,10 +210,10 @@ async def run_lead_crew(
                 logger.error(f"[LeadCrew] Telegram send failed: {e}")
 
         if not tg_sent and lead.phone:
-            import asyncio
+            from src.scheduler.tasks import run_async
             from src.tools.whatsapp_tool import send_text_message
             try:
-                wa_sent = asyncio.get_event_loop().run_until_complete(
+                wa_sent = run_async(
                     send_text_message(phone=lead.phone, message=nurture.message)
                 )
                 logger.info(
