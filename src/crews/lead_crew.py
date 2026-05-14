@@ -230,15 +230,6 @@ async def run_lead_crew(
             )
 
         sent = tg_sent or wa_sent
-                wa_sent = asyncio.get_event_loop().run_until_complete(
-                    send_text_message(phone=lead.phone, message=nurture.message)
-                )
-                logger.info(
-                    f"[LeadCrew] WhatsApp Day {day_number} {'sent' if wa_sent else 'FAILED'} "
-                    f"to {lead.phone}"
-                )
-            except Exception as e:
-                logger.error(f"[LeadCrew] WhatsApp send failed: {e}")
 
         seq = WhatsappSequence(
             id=uuid.uuid4(),
