@@ -77,11 +77,13 @@ async def start_trial(
             db_sync.close()
 
         if tg_chat_id:
-            sent = await send_direct_message(chat_id=tg_chat_id, message=msg.message)
+            from src.scheduler.tasks import run_async
+            sent = run_async(send_direct_message(chat_id=tg_chat_id, message=msg.message))
             logger.info(f"[Adaptiq] Day 1 sent via Telegram to chat_id={tg_chat_id}")
         elif lead_phone:
             from src.tools.whatsapp_tool import send_text_message
-            sent = await send_text_message(phone=lead_phone, message=msg.message)
+            from src.scheduler.tasks import run_async
+            sent = run_async(send_text_message(phone=lead_phone, message=msg.message))
             logger.info(f"[Adaptiq] Day 1 sent via WhatsApp to {lead_phone}")
         else:
             logger.warning(f"[Adaptiq] No Telegram chat_id or phone for lead_id={lead_id}")
@@ -172,13 +174,12 @@ async def run_trial_sequences() -> int:
 
                 # Send via Telegram if chat_id available, else WhatsApp fallback
                 if lead.telegram_chat_id:
-                    import asyncio
-                    asyncio.get_event_loop().run_until_complete(
-                        send_direct_message(chat_id=lead.telegram_chat_id, message=msg.message)
-                    )
+                    from src.scheduler.tasks import run_async
+                    run_async(send_direct_message(chat_id=lead.telegram_chat_id, message=msg.message))
                     logger.info(f"[Adaptiq] Day {trial_day} sent via Telegram to {lead.ig_handle}")
                 elif lead.phone:
                     from src.tools.whatsapp_tool import send_text_message
+                    from src.scheduler.tasks import run_async
                     import asyncio
                     asyncio.get_event_loop().run_until_complete(
                         send_text_message(phone=lead.phone, message=msg.message)
