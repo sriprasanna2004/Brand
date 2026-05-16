@@ -89,21 +89,17 @@ async def run_lead_crew(
             # ── Step 1: Instant auto-reply ──────────────────────────────
             if score.auto_reply_message and score.status.value in ("hot", "warm"):
                 if lead.telegram_chat_id:
-                    # Lead came from Telegram — reply via Telegram bot directly
-                    import asyncio
+                    from src.scheduler.tasks import run_async
                     from src.tools.telegram_tool import send_direct_message
                     try:
-                        asyncio.get_event_loop().run_until_complete(
-                            send_direct_message(
-                                chat_id=lead.telegram_chat_id,
-                                message=score.auto_reply_message,
-                            )
-                        )
+                        run_async(send_direct_message(
+                            chat_id=lead.telegram_chat_id,
+                            message=score.auto_reply_message,
+                        ))
                         logger.info(f"[LeadCrew] Instant Telegram reply sent to chat_id={lead.telegram_chat_id}")
                     except Exception as e:
                         logger.warning(f"[LeadCrew] Telegram auto-reply failed: {e}")
                 else:
-                    # Lead came from Instagram — reply via Instagram DM
                     from src.scheduler.tasks import send_instant_ig_reply_task
                     send_instant_ig_reply_task.delay(
                         ig_user_id=ig_handle,
@@ -114,15 +110,13 @@ async def run_lead_crew(
             # ── Step 2: Notify admin for hot leads ───────────────────────
             if score.should_notify_admin:
                 try:
-                    import asyncio
+                    from src.scheduler.tasks import run_async
                     from src.tools.telegram_tool import send_hot_lead_alert
-                    asyncio.get_event_loop().run_until_complete(
-                        send_hot_lead_alert(
-                            ig_handle=ig_handle,
-                            keywords=score.intent_keywords_found,
-                            auto_reply=score.auto_reply_message[:80],
-                        )
-                    )
+                    run_async(send_hot_lead_alert(
+                        ig_handle=ig_handle,
+                        keywords=score.intent_keywords_found,
+                        auto_reply=score.auto_reply_message[:80],
+                    ))
                 except Exception as e:
                     logger.warning(f"[LeadCrew] Admin alert failed: {e}")
 
